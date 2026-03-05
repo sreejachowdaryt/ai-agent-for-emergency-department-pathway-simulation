@@ -1,1 +1,0 @@
-This folder contains the generation code for the sythentic data that will be output onto the csv files in the synthetic_dataset folder
