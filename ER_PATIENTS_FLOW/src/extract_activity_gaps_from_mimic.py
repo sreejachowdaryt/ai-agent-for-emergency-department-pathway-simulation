@@ -4,11 +4,19 @@ import pandas as pd
 
 from mimic_paths import get_mimic_paths
 
-OUT_DIR = os.path.join("Synthetic_dataset", "data")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))   # .../ER_PATIENTS_FLOW/src
+PROJECT_ROOT = os.path.dirname(BASE_DIR)                # .../ER_PATIENTS_FLOW
+REPO_ROOT = os.path.dirname(PROJECT_ROOT)              # .../ai-agent-for-emergency-department-pathway-simulation
+
+OUT_DIR = os.path.join(PROJECT_ROOT, "Synthetic_dataset", "data")
 os.makedirs(OUT_DIR, exist_ok=True)
+
+MIMIC_DIR = os.path.join(REPO_ROOT, "Reference_mimic_iii")
+
 
 def _to_dt(s):
     return pd.to_datetime(s, errors="coerce")
+
 
 def _save_series(series: pd.Series, filename: str, col_name: str):
     series = pd.to_numeric(series, errors="coerce").dropna()
@@ -19,7 +27,11 @@ def _save_series(series: pd.Series, filename: str, col_name: str):
 
 def main():
     # IMPORTANT: adjust if your folder name differs
-    MIMIC_DIR = os.path.join("..", "Reference_mimic_iii")
+    print("PROJECT_ROOT =", PROJECT_ROOT)
+    print("REPO_ROOT =", REPO_ROOT)
+    print("OUT_DIR =", OUT_DIR)
+    print("MIMIC_DIR =", MIMIC_DIR)
+   
     paths = get_mimic_paths(MIMIC_DIR)
 
     # -------------------------
