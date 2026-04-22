@@ -4,7 +4,7 @@
 
 ## Author 
 **Sreeja Chowdary Tulluru**         
-Bsc Computer Science with Artificial Intelligence     
+BSc Computer Science with Artificial Intelligence     
 COMP3931 Individual Project | University of Leeds | 2025/26      
 
 ---
@@ -27,7 +27,6 @@ The system replicates the journey of patients from arrival through assessment, t
 
 ---
 
-## Project Structure
 
 ## Project Structure
 
@@ -89,6 +88,10 @@ ed_cases.csv
 - Format: `case_id`, `activity`, `timestamp`
 - Enables process mining analysis
 
+Output: 
+```bash
+event_log.csv
+```
 ### 3. Process Mining
 - Uses PM4Py to discover patient flow models
 - Generates process trees and Directly-Follows Graphs (DFGs)
@@ -100,21 +103,21 @@ ed_cases.csv
 - ED Pathway Modelled:
 
 ```bash
-Arrival → Assessment → Outcome Decision → Boarding (if required) → Departure
+Arrival → Assessment → Outcome Decision → Boarding (if required - only for non-discharge patients) → Departure
 ```
 Key Design Features:
 - Dataset-driven arrival schedule
 - Combined assessment stage (triage + doctor proxy)
 - Resource-constrained environment:
-    - assessment bays
-    - boarding slots
+    - assessment bays (5)
+    - boarding slots (7)
 
 ### 5. AI Agent Integration
 Three simulation configurations are implemented:
 
 1. **Baseline Model**
-    - FIFO boarding queue
-    - No prioritisation
+  - FIFO boarding queue
+  - No prioritisation
 
 2. **Rule-Based Agent**
   - Prioritises patients based on severity
@@ -223,7 +226,7 @@ python ER_PATIENTS_FLOW/src/extract_ed_timing_from_mimic_iv_ed.py
 python ER_PATIENTS_FLOW/src/extract_activity_gaps_from_mimic.py
 ```
 
-### Step 2: Generate synthetic dataset
+### Step 2: Generate synthetic dataset (Generated with 50,000 patients)
 
 ```bash
 python ER_PATIENTS_FLOW/src/generate_ed_cases.py
