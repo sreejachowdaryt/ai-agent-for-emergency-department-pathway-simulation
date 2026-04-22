@@ -1,4 +1,17 @@
-# Probablity Distribution of admisisons per patient using the MIMIC-III dataset (Patient.csv and Admission.csv)
+# src/cderive_admissions_pmf_from_mimic.py
+"""
+Derive the probability distribution of admissions per patient from the MIMIC-III dataset.
+
+This script:
+- Loads patient and admission records from PATIENTS.csv and ADMISSIONS.csv
+- Counts the number of unique admissions for each patient
+- Includes patients with zero recorded admissions
+- Computes both the distribution and probability mass function (PMF) of admissions per patient
+- Saves the resulting CSV files for use in synthetic data generation
+
+Used to model realistic repeat-visit behaviour in the synthetic dataset,
+where repeated admissions are used as a proxy for multiple ED visits.
+"""
 
 import os
 import pandas as pd

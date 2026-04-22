@@ -1,4 +1,4 @@
-# resources.py
+# src/resources.py
 """
 ED Resources — calibrated for a mid-sized UK Emergency Department
 with an effective workload of approximately 150–160 patients/day
@@ -8,13 +8,18 @@ Resource capacities are calibrated using empirical arrival rates
 derived from the dataset, guided by Little's Law (L = λW),
 targeting utilisation (ρ) of approximately 0.80–0.90 per resource pool.
 
+Assumptions:
     Effective arrival rate: λ ≈ 150 patients/day ≈ 6.25 patients/hour
     Utilisation: ρ = λ / (c × μ) = λW / c
+
+Resource Configurations:
 
 Resource         Capacity  Service time  ρ       Rationale
 -----------      --------  ------------  ------  --------------------------------
 assessment_bay   5         32.5 min      0.85    Combined triage+doctor proxy
 boarding_slot    7         147 min       0.85    Empirically derived from dataset
+
+Modelling Notes:
 
 NOTE on resource redesign:
   The hybrid dataset uses a single 'initial_assessment_time - arrival_time'

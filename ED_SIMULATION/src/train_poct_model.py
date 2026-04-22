@@ -1,18 +1,39 @@
-# train_poct_model.py
+# src/train_poct_model.py
 """
 POCT Amenability Classifier — Random Forest
 ============================================
-Deliverable 3 (ML Extension)
-BSc Computer Science with AI, University of Leeds
 
-Trained on the hybrid MIMIC-IV-ED + MIMIC-III synthetic dataset.
+Train the POCT amenability classifier used by the hybrid ED simulation.
 
-CHANGES FOR NEW HYBRID DATASET:
-  - triage_duration_h derived from initial_assessment_time - arrival_time
-    (the combined triage+doctor proxy from MIMIC-IV-ED edstays)
-  - pathway_outcome column used (DISCHARGED/ADMITTED/TRANSFERRED)
-  - first_careunit null for discharge patients — filled as UNKNOWN
-  - admission_type sampled from MIMIC distribution (EMERGENCY/ELECTIVE etc.)
+This script trains a Random Forest classifier on the synthetic ED case dataset
+to estimate whether a patient is likely to benefit from POCT-based acceleration
+during the assessment stage.
+
+Dataset and modelling assumptions:
+- Trained on the hybrid synthetic dataset derived from MIMIC-IV-ED and MIMIC-III
+- Assessment duration is represented by the proxy:
+      initial_assessment_time - arrival_time
+- pathway_outcome is used in the updated dataset structure
+- first_careunit may be null for discharged patients and is filled as UNKNOWN
+- admission_type may include multiple categories sampled from the broader
+  MIMIC distribution
+
+Feature engineering:
+- diagnosis code
+- admission type
+- careunit
+- arrival hour
+- arrival weekday
+- assessment-duration bucket
+
+Outputs:
+- trained Random Forest model
+- model metadata (encoders, feature mappings, performance metrics)
+- precomputed POCT probability lookup table for O(1) simulation-time inference
+- feature importance figure for interpretation
+
+The trained model supports the ML-enhanced simulation by enabling fast,
+precomputed POCT decision support during runtime.
 """
 
 import os

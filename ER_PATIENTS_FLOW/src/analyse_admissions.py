@@ -1,3 +1,17 @@
+# src/analyse_admissions.py
+"""
+Analyse admissions per patient in the synthetic ED dataset and compare with MIMIC-derived distributions.
+
+This script:
+- Computes the number of admissions per patient from ed_cases.csv
+- Generates distribution and probability tables (including zero-admission patients)
+- Produces a plot of synthetic admissions
+- Compares synthetic probabilities with MIMIC-derived probabilities using bucketed groups (0–4, 5+)
+- Outputs comparison plots and CSV files for validation
+
+Used to validate that the synthetic dataset preserves realistic admission patterns.
+"""
+
 import os
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -42,9 +56,9 @@ def main():
     all_counts = patients[["patient_id"]].copy()
     all_counts["num_admissions"] = all_counts["patient_id"].map(counts).fillna(0).astype(int)
 
-    # ---------------------------
+    # ----------------------------------------------------------------
     # Synthetic: distribution + probability (unbucketed, includes 0)
-    # ---------------------------
+    # ----------------------------------------------------------------
     dist = all_counts["num_admissions"].value_counts().sort_index()
     dist_df = dist.reset_index()
     dist_df.columns = ["num_admissions", "num_patients"]

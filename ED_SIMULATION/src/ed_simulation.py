@@ -1,23 +1,24 @@
-# ed_simulation.py
+# src/ed_simulation.py
 """
 Baseline ED Simulation — Deliverable 2
 =======================================
-AI Agent for Emergency Department Pathway Simulation
-BSc Computer Science with AI, University of Leeds
+
+This script implements the baseline ED model used for comparison against
+the AI-enhanced simulation variants.
 
 DATASET: Hybrid MIMIC-IV-ED + MIMIC-III synthetic dataset.
-  ED phase (arrival, assessment, boarding) derived from MIMIC-IV-ED edstays.
-  Post-ED inpatient phase (careunit stays) derived from MIMIC-III transfers.
-  Simulation models ED-only pathway; patients exit at boarding handover.
+- ED phase (arrival, assessment, boarding) derived from MIMIC-IV-ED edstays.
+- Post-ED inpatient phase (careunit stays) derived from MIMIC-III transfers.
+- Simulation models ED-only pathway; patients exit at boarding handover.
 
 PATIENT PATHWAY:
   Arrival
     → wait for assessment bay
     → assessment (triage + doctor combined, 32.5 min mean)
     → OUTCOME DECISION
-        discharge   (61.0%) → patient exits immediately
+        discharge   (61.2%) → patient exits immediately
         admission   (34.6%) → waits for boarding slot → exits ED
-        transferred  (4.4%) → waits for boarding slot → exits ED
+        transferred  (4.2%) → waits for boarding slot → exits ED
 
 ARRIVALS:
   Arrival schedule is read directly from the synthetic ed_cases.csv file.
@@ -28,7 +29,7 @@ RESOURCES (Little's Law, target ρ = 0.80–0.90):
   assessment_bay:  5
   boarding_slot:   7
 
-METRICS:
+PERFORMANCE METRICS:
   assessment_wait  — arrival → assessment bay available
   boarding_wait    — assessment end → boarding slot available (non-discharge)
   total_los        — arrival → ED departure

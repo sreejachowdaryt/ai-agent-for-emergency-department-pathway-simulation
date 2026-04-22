@@ -2,12 +2,13 @@
 """
 Convert the synthetic ED dataset into an ordered event log for process mining.
 
-Each row in ed_cases.csv becomes one TRACE (one patient case).
-Each activity in that trace becomes a timestamped EVENT.
-
-This version fixes equal-timestamp ordering issues by assigning
-an explicit event_order so that process mining does not infer
-spurious loops/concurrency.
+This script:
+- Converts each row in ed_cases.csv into a single trace (case)
+- Maps pathway timestamps to clinical activities such as Arrival, Initial Assessment,
+  Boarding Start, ED Departure, careunit transfers, and Hospital Discharge
+- Preserves the correct activity sequence using an explicit event_order field
+  when multiple events share the same timestamp
+- Exports the resulting event log to CSV for downstream process discovery
 
 Pathway represented:
 

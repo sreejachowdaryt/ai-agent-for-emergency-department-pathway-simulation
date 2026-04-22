@@ -2,8 +2,6 @@
 """
 Logical + statistical validation for Synthetic_dataset/data/ed_cases.csv
 
-NEW HYBRID DATASET VALIDATION
-
 Logical checks:
  - arrival_time <= initial_assessment_time <= ed_departure_time
  - if boarding_start_time present:
@@ -16,8 +14,8 @@ Logical checks:
        second_transfer_in < second_transfer_out
  - discharge_time >= ed_departure_time
  - no overlapping admissions per patient
- - outcome-consistency checks:
-       DISCHARGED rows should not have careunit fields
+ - pathway outcome-consistency checks:
+       DISCHARGED rows should not have cboarding or areunit fields
        ADMITTED rows should have first-careunit fields and no second-careunit fields
        TRANSFERRED rows should have both first and second-careunit fields
 

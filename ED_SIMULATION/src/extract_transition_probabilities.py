@@ -1,3 +1,31 @@
+# src/extract_transition_probabilities.py
+"""
+Extract transition probabilities from the ED event log for process analysis.
+
+This script computes the probability of transitions between consecutive
+activities in the event log, representing the observed patient flow
+through the Emergency Department pathway.
+
+Method:
+- Events are ordered within each case using timestamps
+- Consecutive activity pairs are extracted (e.g., A → B)
+- Transition frequencies are counted across all cases
+- Probabilities are computed as:
+      P(next = B | current = A)
+
+Output:
+- A transition probability table with:
+      from, to, count, total, probability
+
+Use in project:
+- Supports process mining analysis (e.g., Directly-Follows Graph)
+- Provides empirical insight into pathway behaviour
+- Can be used for validation of the synthetic dataset against expected flow patterns
+
+Note:
+- This script is analytical only and is not directly used by the simulation model
+"""
+
 import pandas as pd
 
 

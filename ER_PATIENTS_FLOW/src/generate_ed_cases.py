@@ -2,15 +2,15 @@
 """
 Generate a synthetic ED dataset (patients.csv + ed_cases.csv).
 
-Hybrid design:
+This script creates a hybrid synthetic dataset by combining:
 - ED phase calibrated from MIMIC-IV-ED edstays
 - Post-ED admitted careunit pathway calibrated from MIMIC-III transfers
 
 ED model:
-Arrival -> Triage/Doctor -> Decision -> Discharge OR Boarding -> ED departure
+Arrival -> Assessment (Triage/Doctor) -> Decision -> Discharge OR Boarding -> ED departure
 
 Admitted pathway only:
-Boarding -> first_careunit -> optional second_careunit
+Boarding -> first_careunit -> optional second_careunit -> Discharge
 
 MIMIC-IV-ED derived:
 - arrival hour/weekday patterns
@@ -20,6 +20,9 @@ MIMIC-IV-ED derived:
 MIMIC-III derived:
 - admissions per patient
 - inter-admission gaps
+- admission type distribution
+- diagnosis code distribution
+- discharge location distribution
 - first careunit distribution
 - second careunit distribution
 - second careunit conditional on first careunit
@@ -32,9 +35,9 @@ Synthetic by design:
 - initial_assessment_time
 - boarding_start_time
 
-IMPORTANT FIX IN THIS VERSION:
-- ensures arrival_time <= initial_assessment_time <= ed_departure_time
-- ensures for admitted cases:
+The script also enforces temporal consistency, ensuring:
+- arrival_time <= initial_assessment_time <= ed_departure_time
+- for admitted cases:
   initial_assessment_time <= boarding_start_time <= ed_departure_time
 """
 

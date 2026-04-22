@@ -1,15 +1,24 @@
-# resources_ai.py
+# src/resources_ai.py
 """
-ED Resources — AI Agent version (Deliverable 3)
+ED resource configuration for the AI-enhanced simulation model.
 
-Identical to resources.py with ONE change:
-  boarding_slot is a SimPy PriorityResource instead of Resource.
+This module extends the baseline resource configuration by replacing
+the boarding resource with a priority-based queue.
 
-This enables the AI agent to prioritise critical patients at boarding.
-All capacities identical to baseline — any difference in results is
-caused only by the priority ordering, not by additional resources.
+Key difference from baseline:
+- boarding_slot is implemented as a SimPy PriorityResource instead of a standard Resource
 
-boarding_slot capacity = 7 (matches baseline resources.py)
+Purpose:
+- Enables the AI agent to prioritise higher-severity patients when
+  allocating boarding slots
+
+All other aspects remain unchanged:
+- assessment_bay capacity = 5
+- boarding_slot capacity  = 7
+
+This ensures that any observed performance differences between the
+baseline and AI simulations are due to prioritisation logic rather
+than changes in resource capacity.
 """
 
 import simpy

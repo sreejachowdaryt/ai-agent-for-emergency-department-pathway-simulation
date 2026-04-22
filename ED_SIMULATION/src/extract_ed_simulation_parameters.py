@@ -1,60 +1,33 @@
 # src/extract_ed_simulation_parameters.py
 """
-Extract simulation parameters from the NEW hybrid synthetic ED dataset.
+Extract simulation input parameters from the synthetic ED case dataset.
 
-This version is aligned with the current ed_cases.csv structure.
+This script derives empirical parameter files from ed_cases.csv for use
+in the discrete-event simulation models.
 
-Dataset fields used:
-- arrival_time
-- initial_assessment_time
-- boarding_start_time
-- ed_departure_time
-- first_transfer_in
-- first_transfer_out
-- second_transfer_in
-- second_transfer_out
-- ed_los_hours
-- total_careunit_los_hours
-- pathway_outcome
+Extracted parameters include:
+- interarrival times between consecutive ED visits
+- assessment duration proxy:
+      initial_assessment_time - arrival_time
+- boarding duration:
+      ed_departure_time - boarding_start_time
+- ED length of stay (LOS)
+- first careunit stay duration
+- second careunit stay duration
+- pathway outcome probabilities
+- post-first-careunit transition probabilities
 
-Outputs saved to ../data/:
+Outputs:
+- CSV files containing empirical distributions and branch probabilities
+  saved to the simulation data directory
 
-1. ed_interarrival_times_hours.csv
-   Time between consecutive arrivals.
-
-2. ed_assessment_durations_hours.csv
-   initial_assessment_time - arrival_time
-   This is the ED assessment/service proxy for the combined triage+doctor stage.
-
-3. ed_boarding_durations_hours.csv
-   ed_departure_time - boarding_start_time
-   Only for admitted/transferred patients.
-
-4. ed_ed_los_hours.csv
-   Total ED length of stay distribution.
-
-5. ed_first_careunit_stay_hours.csv
-   first_transfer_out - first_transfer_in
-
-6. ed_second_careunit_stay_hours.csv
-   second_transfer_out - second_transfer_in
-
-7. ed_branch_probabilities.csv
-   Outcome probabilities:
-   - p_discharge
-   - p_admission
-   - p_transferred
-
-8. ed_post_first_careunit_transition_probabilities.csv
-   Branch after first careunit:
-   - p_hospital_discharge_after_first
-   - p_second_careunit_after_first
-
-Important note:
-- Queue waiting times are NOT extracted here.
-  They emerge from the simulation.
-- The ED assessment duration here is a synthetic proxy for the
-  combined pre-decision clinical stage.
+Important notes:
+- Queue waiting times are not extracted here; they emerge from the
+  simulation under resource constraints
+- The assessment duration is a synthetic proxy for the combined
+  pre-decision clinical stage
+- These extracted distributions are used to calibrate the baseline,
+  rule-based, and hybrid ML simulation variants
 """
 
 import os

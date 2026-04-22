@@ -1,5 +1,17 @@
 # src/utils.py
-# Helper Functions for synthetic ED dataset generation
+"""
+Utility functions for synthetic ED dataset generation.
+
+This module provides helper functions for:
+- generating random and relative timestamps
+- sampling from empirical (MIMIC-derived) distributions
+- handling inter-admission gaps
+- deriving patient demographic attributes
+- formatting datetime fields to match MIMIC-style outputs
+
+These utilities are used across the data generation pipeline to ensure
+temporal consistency, reproducibility, and realistic data sampling.
+"""
 
 import os
 import random

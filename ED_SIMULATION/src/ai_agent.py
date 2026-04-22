@@ -1,9 +1,10 @@
-# ai_agent.py
+# src/ai_agent.py
 """
 AI Agent — Rule-Based Boarding Priority + Escalation Agent
 ==========================================================
-Deliverable 3: AI Agent for Emergency Department Pathway Simulation
-BSc Computer Science with AI, University of Leeds
+
+This module implements a rule-based operational agent that intervenes
+at the boarding stage for non-discharge patients.
 
 AGENT TYPE:
   Rule-based operational agent
@@ -32,10 +33,13 @@ BOARDING ESCALATION RULES:
   medium      147 min
   low         147 min
 
-RATIONALE:
-  These rules represent escalation of bed management and inpatient
-  handover for higher-acuity patients, while preserving transparent
-  and clinically interpretable decision logic.
+Interpretation:
+- Higher-acuity patients receive faster access to boarding slots
+  and reduced boarding durations
+- Lower-acuity patients follow standard boarding behaviour
+
+This agent provides a transparent and interpretable baseline for
+evaluating AI-driven prioritisation strategies in the ED simulation.
 """
 
 SEVERITY_TO_PRIORITY = {

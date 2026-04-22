@@ -3,9 +3,9 @@
 ---
 
 ## Author 
-Sreeja Chowdary Tulluru
-Bsc Computer Science with Artificial Intelligence
-COMP3931 Individual Project | University of Leeds | 2025/26 
+**Sreeja Chowdary Tulluru**         
+Bsc Computer Science with Artificial Intelligence     
+COMP3931 Individual Project | University of Leeds | 2025/26      
 
 ---
 
@@ -13,46 +13,55 @@ COMP3931 Individual Project | University of Leeds | 2025/26
 
 This project investigates how Artificial Intelligence (AI) can be used to simulate and optimise patient flow within an Emergency Department (ED). It combines synthetic data generation, process mining, and discrete-event simulation to model realistic ED pathways and evaluate the impact of AI-driven decision-making.
 
-The system replicates the journey of patients from arrival through assessment, treatment, and discharge or admission, and introduces AI-based interventions to improve efficiency and prioritisation.
+The system replicates the journey of patients from arrival through assessment, treatment, and discharge or admission/transferred, and introduces AI-based interventions to improve efficiency, prioritisation and system-leve performnace.
 
 ---
 
 ## Objectives
 
-- Design a realistic simulation of ED patient flow using synthetic data
-- Develop an AI agent for triage and prioritisation
-- Integrate the AI agent into a discrete-event simulation
+- Design a realistic simulation of ED patient flow using synthetic dataset
+- Develop an AI agent for prioritisation and operational decision-making
+- Integrate the AI agent into a discrete-event simulation (DES)
 - Compare baseline and AI-driven system performance
-- Evaluate improvements in waiting time, throughput, and resource utilisation
+- Evaluate improvements in waiting time, length of stay, and NHS compliance
 
 ---
 
 ## Project Structure
-AI-Agent-ED-Simulation/
+
+## Project Structure
+
+```bash
+AI-AGENT-FOR-EMERGENCY-DEPARTMENT-PATHWAY-SIMULATION/
 │
-├── ER_PATIENTS_FLOW/ # Data generation and process mining
-│ ├── src/
-│ │ ├── generate_ed_cases.py
-│ │ ├── extract_activity_gaps_from_mimic.py
-│ │ ├── extract_ed_timing_from_mimic_iv_ed.py
-│ │ ├── create_event_log.py
-│ │ ├── process_discovery.py
-│ │ └── ...
-│ └── Synthetic_dataset/
-│ └── data/
+├── ER_PATIENTS_FLOW/              # Synthetic dataset generation
+│   ├── src/
+│   │   ├── generate_ed_cases.py
+│   │   ├── extract_activity_gaps_from_mimic.py
+│   │   ├── extract_ed_timing_from_mimic_iv_ed.py
+│   │   └── ...
+│   └── Synthetic_dataset/
+│       └── data/
+│           └── ed_cases.csv
 │
-├── ED_SIMULATION/ # Simulation and AI agents
-│ ├── src/
-│ │ ├── ed_simulation.py
-│ │ ├── ed_simulation_ai.py
-│ │ ├── ed_simulation_ml.py
-│ │ ├── ai_agent.py
-│ │ └── ...
-│ └── data/
+├── ED_SIMULATION/                 # Process mining, simulation, AI agents
+│   ├── src/
+│   │   ├── create_event_log.py
+│   │   ├── process_discovery.py
+│   │   ├── extract_ed_simulation_parameters.py
+│   │   ├── ed_simulation.py              # Baseline DES
+│   │   ├── ed_simulation_ai.py           # Rule-based AI
+│   │   ├── ed_simulation_ml.py           # Hybrid ML + rule-based
+│   │   ├── ai_agent.py
+│   │   └── ...
+│   │
+│   ├── data/                     # Generated datasets & simulation outputs
+│   └── figures/                  # Dissertation figures
 │
+├── Reference_mimic_iii/          # Reference schemas (not used directly)
 ├── requirements.txt
-├── requirements-lock.txt
 └── README.md
+```
 
 ---
 
@@ -61,9 +70,19 @@ AI-Agent-ED-Simulation/
 The project follows a structured pipeline:
 
 ### 1. Synthetic Dataset Generation
-- Based on statistical distributions derived from MIMIC-III and MIMIC-IV-ED
-- Generates patient records and ED case pathways
-- Preserves temporal consistency and realistic transitions
+A hybrid dataset is generated using statistical distributions derived from:
+- MIMIC-III (care unit transitions and inpatient pathways)
+- MIMIC-IV-ED (ED timings and arrival patterns)
+
+The dataset:
+- preserves temporal consistency
+- models repeated patient admissions
+- captures realistic ED flow dynamics
+
+Output: 
+```bash
+ed_cases.csv
+```
 
 ### 2. Event Log Construction
 - Converts synthetic ED cases into event logs
@@ -74,35 +93,82 @@ The project follows a structured pipeline:
 - Uses PM4Py to discover patient flow models
 - Generates process trees and Directly-Follows Graphs (DFGs)
 - Validates realism of the synthetic dataset
+- Analyses transitions between ED stages
 
 ### 4. Discrete-Event Simulation (DES)
 - Built using SimPy
-- Models key ED stages:
-  - Arrival
-  - Triage
-  - Doctor consultation
-  - Boarding
-  - Discharge or admission
+- ED Pathway Modelled:
+
+```bash
+Arrival → Assessment → Outcome Decision → Boarding (if required) → Departure
+```
+Key Design Features:
+- Dataset-driven arrival schedule
+- Combined assessment stage (triage + doctor proxy)
+- Resource-constrained environment:
+    - assessment bays
+    - boarding slots
 
 ### 5. AI Agent Integration
-Two types of AI agents are implemented:
+Three simulation configurations are implemented:
 
-- **Rule-Based Agent**
+1. **Baseline Model**
+    - FIFO boarding queue
+    - No prioritisation
+
+2. **Rule-Based Agent**
   - Prioritises patients based on severity
   - Reduces waiting time for critical cases
 
-- **Machine Learning Agent**
-  - Predicts Point-of-Care Testing (POCT) needs
-  - Enables fast-track pathways for suitable patients
-  - Reduces doctor consultation time
+| Severity | Priority | Boarding Time |
+| -------- | -------- | ------------- |
+| Critical | 1        | 90 min        |
+| High     | 2        | 110 min       |
+| Medium   | 3        | 147 min       |
+| Low      | 4        | 147 min       |
+
+3. **Machine Learning Agent**
+Adds ML-based POCT prediction at assessment stage:
+- Random Forest classifier predicts POCT amenability
+- Reduces assessment time for eligible patients
+- Enables fast-track discharge for low/medium severity cases
+- Combined with rule-based boarding prioritisation
 
 ### 6. Performance Evaluation
-Simulation outputs are compared using:
 
-- Waiting time (triage, doctor, boarding)
-- Length of stay (LOS)
-- Throughput
-- NHS 4-hour target compliance
+Simulation outputs are evaluated using the following key performance metrics:
+
+- **Waiting Time**  
+  Time spent waiting for triage and doctor consultation  
+
+- **Boarding Time**  
+  Time spent waiting for an inpatient ward/ICU after treatment decision (admitted/transferred patients) 
+
+- **Total ED Length of Stay (LOS)**  
+  Total time from patient arrival to ED departure  
+
+- **NHS 4-Hour Target Compliance**  
+  Percentage of patients discharged/admitted/transferred within 4 hours  
+
+---
+
+### Bottleneck Analysis
+
+The baseline simulation identified two primary bottlenecks:
+
+- **Assessment Stage Bottleneck**  
+  Caused by limited assessment bays, resulting in queues forming before patients can begin triage and consultation. This leads to increased waiting times during peak arrival periods 
+
+- **Boarding Stage Bottleneck**  
+  Caused by limited **boarding slot capacity**, preventing admitted patients from leaving the ED promptly. This results in prolonged boarding times and contributes significantly to overall ED congestion.  
+
+The introduction of AI agents did not eliminate these bottlenecks completely, as they are structural constraints within the system. However, the AI interventions:
+ 
+- Improved prioritisation of high-severity patients  
+- Reduce assessment duration (ML agent)     
+- Improved patient flow under constrained resources 
+
+This demonstrates that while AI can optimise flow and decision-making, underlying capacity limitations remain the dominant drivers of system congestion.
 
 ---
 
@@ -122,7 +188,7 @@ This project uses:
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/sreejachowdaryt/ai-agent-for-emergency-department-pathway-simulation.git
+git https://github.com/sreejachowdaryt/ai-agent-for-emergency-department-pathway-simulation.git
 cd ai-agent-for-emergency-department-pathway-simulation
 ```
 
@@ -150,7 +216,7 @@ Ensure it is added to system PATH.
 
 ## Usage
 
-### Step 1: Extract distributions from MIMIC data
+### Step 1: Extract distributions from MIMIC data (Already extracted)
 
 ```bash
 python ER_PATIENTS_FLOW/src/extract_ed_timing_from_mimic_iv_ed.py
@@ -175,7 +241,19 @@ python ED_SIMULATION/src/create_event_log.py
 python ED_SIMULATION/src/process_discovery.py
 ```
 
-### Step 5: Run simulations
+### Step 5: Extract simulation parameters
+
+```bash
+python ED_SIMULATION/src/extract_ed_simulation_parameters.py
+```
+
+### Step 6: Train ML model (POCT)
+
+```bash
+python ED_SIMULATION/src/train_poct_model.py
+```
+
+### Step 7: Run simulations
 
 Baseline Simulation
 ```bash
@@ -192,10 +270,17 @@ Hybrid - ML + Rule-Baased Simulation
 python ED_SIMULATION/src/ed_simulation_ml.py
 ```
 
-### Step 6: Compare results
+### Step 8: Compare Models
 
 ```bash
 python ED_SIMULATION/src/compare_simulations.py
+```
+
+### Step 9: Generate figures
+
+```bash
+python ED_SIMULATION/src/generate_baseline_plots.py
+python ED_SIMULATION/src/generate_comparison_plots.py
 ```
 
 ---
@@ -203,19 +288,21 @@ python ED_SIMULATION/src/compare_simulations.py
 ## Key Features 
 
 - Hybrid synthetic dataset generation (MIMIC-III + MIMIC-IV-ED)
-- Realistic ED pathway modelling
-- Integration of AI agents into simulation
-- Process mining validation
+- Dataset-driven simulation (realistic arrival patterns)
+- Process Mining validation 
+- Integration of AI agents into simulation (Rule-based and Hybrid)
 - Performance comparison across multiple simulation strategies
+- NHS compliance analysis
 
 ---
 
 ## Results 
 
 - AI agents significantly improve prioritisation of critical patients
+- Reduced assessment waiting time (ML agent)
 - Reduction in waiting times for high-severity cases
 - Improved NHS 4-hour target compliance
-- Better resource utilisation under constrained conditions
+- Hybrid model achieves best overall system performance
 
 ---
 

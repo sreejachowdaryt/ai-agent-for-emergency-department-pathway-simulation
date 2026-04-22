@@ -1,4 +1,16 @@
-# src/mimic_paths.py (From MIMIC-III)
+# src/mimic_paths.py
+"""
+Utility module for locating MIMIC dataset files within the project directory.
+
+This script:
+- Searches recursively for required MIMIC CSV files
+- Returns file paths for key tables used across the project:
+  ADMISSIONS, TRANSFERS, ICUSTAYS, CALLOUT, DIAGNOSES_ICD, and EDSTAYS
+
+Used to avoid hardcoding file paths and ensure flexibility when working
+with different MIMIC-III / MIMIC-IV-ED folder structures.
+"""
+
 import os
 
 def find_file(root_dir: str, filename: str) -> str:

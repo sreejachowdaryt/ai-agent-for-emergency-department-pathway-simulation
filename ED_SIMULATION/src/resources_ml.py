@@ -1,11 +1,27 @@
-# resources_ml.py
+# src/resources_ml.py
 """
-ED Resources — ML Agent version (Deliverable 3, ML Extension)
+ED resource configuration for the hybrid ML + AI-enhanced simulation model.
 
-Identical to resources_ai.py — PriorityResource for boarding slot.
-Separated into its own file so the three simulations are fully independent.
+This module uses the same resource structure as the rule-based AI model,
+with a priority-based boarding queue.
 
-boarding_slot capacity = 7 (matches baseline and rule-based agent)
+Key difference from baseline:
+- boarding_slot is implemented as a SimPy PriorityResource instead of a standard Resource
+
+Purpose:
+- Enables severity-based prioritisation of patients during boarding
+- Works in combination with the ML-based POCT intervention applied at the assessment stage
+
+All resource capacities remain unchanged:
+- assessment_bay capacity = 5
+- boarding_slot capacity  = 7
+
+This ensures that any observed performance differences across:
+  - baseline simulation
+  - rule-based AI simulation
+  - hybrid ML + AI simulation
+
+are due to decision-making logic rather than changes in resource capacity.
 """
 
 import simpy

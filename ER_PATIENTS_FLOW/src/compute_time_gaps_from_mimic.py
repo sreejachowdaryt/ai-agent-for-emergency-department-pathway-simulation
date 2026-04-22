@@ -1,4 +1,17 @@
-# Computed Time gaps from MIMIC-III dataset for multiple admissions (Inter-admission Time Gaps)
+# src/compute_time_gaps_from_mimic.py
+"""
+Compute inter-admission time gaps from the MIMIC-III dataset.
+
+This script:
+- Extracts admission and discharge timestamps from ADMISSIONS.csv
+- Calculates time gaps between consecutive admissions for each patient
+- Filters valid positive gaps and converts them into days
+- Outputs the empirical distribution of inter-admission gaps to a CSV file
+- Provides summary statistics (mean, median, percentiles) for validation
+
+Used to model realistic time intervals between repeated patient visits 
+(approximated as multiple ED visits) in the synthetic dataset.
+"""
 
 import os
 import pandas as pd

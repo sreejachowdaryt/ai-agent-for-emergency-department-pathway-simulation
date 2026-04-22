@@ -1,20 +1,40 @@
-# compare_simulations.py
+# src/compare_simulations.py
 """
-Final Three-Way Simulation Comparison
-=====================================
-Baseline vs Rule-Based vs Hybrid ML Model
+Compare baseline, rule-based, and hybrid ML ED simulation results.
 
-Aligned with final dataset-driven simulation models:
-  - Baseline: dataset-driven DES with FIFO boarding
-  - Rule-Based: severity-based boarding priority + escalation
-  - Hybrid ML: POCT-based assessment reduction + rule-based boarding
+This script performs a three-way comparison of the final dataset-driven
+simulation models:
+
+- Baseline model:
+  discrete-event simulation with FIFO boarding
+- Rule-based model:
+  severity-based boarding priority and escalation
+- Hybrid ML model:
+  POCT-based assessment acceleration combined with rule-based boarding
 
 Outputs:
-  1. comparison_table.csv
-     Full comparison table with means, stds, deltas, and paired t-test p-values
+1. comparison_table.csv
+   Contains replication-level summary comparisons including:
+   - mean and standard deviation
+   - absolute differences between models
+   - paired t-test p-values
+   - statistical significance flags
 
-  2. nhs_compliance_comparison.csv
-     Replication-level NHS 4-hour compliance values for the three models
+2. nhs_compliance_comparison.csv
+   Contains replication-level NHS 4-hour compliance values and
+   compliance improvements across the three models
+
+Comparison metrics include:
+- assessment waiting time
+- boarding waiting time
+- total ED length of stay (LOS)
+- NHS 4-hour compliance
+- annual patient outcome counts
+- boarding wait by severity
+
+This script supports the final evaluation stage of the project by
+quantifying whether AI-based interventions improve ED performance
+relative to the baseline model.
 """
 
 import os

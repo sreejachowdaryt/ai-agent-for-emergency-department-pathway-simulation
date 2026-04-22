@@ -1,12 +1,30 @@
-# generate_baseline_plots.py
+# src/generate_baseline_plots.py
 """
-Baseline ED Simulation — Figure Generation Script
-Generates three dissertation figures from the baseline simulation for Chapter 4.
+Generate dissertation figures from the baseline ED simulation outputs.
 
-Updated for final dataset-driven baseline model:
-  - assessment_wait_mean used instead of separate triage/doctor waits
-  - outcomes are discharge / admission / transferred
-  - third figure changed from boarding-wait histogram to total LOS histogram
+This script creates summary visualisations for Chapter 4 using the
+baseline simulation results saved in:
+- simulation_summary.csv
+- simulation_patient_log.csv
+
+Figures generated:
+1. Mean waiting time by stage
+   - assessment wait
+   - boarding wait
+
+2. NHS 4-hour target compliance by replication
+
+3. Total ED length of stay (LOS) distribution
+   - based on patient-level results from one replication
+   - trimmed at the 99th percentile for readability
+
+Notes:
+- The updated baseline model uses a single combined assessment stage
+  rather than separate triage and doctor waiting times
+- Outcomes are represented as:
+      discharge, admission, transferred
+- All figures are formatted for dissertation reporting and saved to:
+      ../figures/
 """
 
 import os

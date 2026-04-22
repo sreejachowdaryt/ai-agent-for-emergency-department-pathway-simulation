@@ -10,8 +10,8 @@ What is derived from MIMIC-IV-ED:
 - ED LOS for discharged-home cases
 - ED disposition probabilities
 
-These are used to model the ED phase:
-Arrival -> Triage/Doctor -> Decision -> Discharge OR Boarding -> ED departure
+These outputs are used to calibrate the ED phase of the synthetic dataset:
+Arrival -> Assessment (Triage/Doctor) -> Decision -> Discharge OR Boarding -> ED departure
 
 Important:
 edstays intime->outtime gives total ED stay, not pure boarding wait.

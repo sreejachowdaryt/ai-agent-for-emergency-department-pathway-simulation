@@ -1,57 +1,47 @@
-# ed_simulation_ml.py
+# src/ed_simulation_ml.py
 """
 Hybrid ML + Rule-Based Agent ED Simulation — Deliverable 3
 ===========================================================
-AI Agent for Emergency Department Pathway Simulation
-BSc Computer Science with AI, University of Leeds
 
-This version matches the dataset-driven baseline simulation, but adds
-two interventions:
+This script extends the baseline ED simulation with two coordinated interventions:
 
-1. ML-based POCT streaming at the assessment stage
-2. Rule-based priority + escalation at the boarding stage
+1. Machine learning-based POCT streaming at the assessment stage
+2. Rule-based boarding prioritisation and escalation for non-discharge patients
 
-DATASET-DRIVEN ARRIVALS:
-  Arrival schedule is read directly from the synthetic ed_cases.csv file.
-  This preserves repeated patient admissions and temporal ordering.
-  Visits are still processed independently once they enter the simulation.
+Dataset basis:
+- Arrival schedule loaded directly from the synthetic ed_cases.csv file
+  to preserve realistic temporal ordering and repeated patient visits
+- Patients are simulated independently once they enter the system
 
 HYBRID AGENT MECHANISM:
 
-ASSESSMENT STAGE (ML POCT):
-  A Random Forest classifier predicts POCT amenability from:
-    - diagnosis code
-    - admission type
-    - careunit
-    - arrival hour
-    - weekday
-    - assessment duration bucket
+ML intervention at assessment:
+- A pre-trained Random Forest model estimates the probability that a
+  patient is suitable for POCT-based acceleration
+- Prediction uses sampled clinical and pathway-related features:
+  diagnosis code, admission type, careunit, arrival hour, weekday,
+  and assessment-duration bucket
+- If the POCT probability exceeds the configured threshold, the patient
+  receives a reduced assessment time based on severity
+- Low- and medium-severity POCT patients with high confidence and
+  discharge outcome are flagged as fast-tracked
 
-  If POCT-amenable (probability >= 0.55):
-    critical → 16 min
-    high     → 20 min
-    medium   → 23 min
-    low      → 16 min
+Rule-based intervention at boarding:
+- Applies severity-based boarding priority using SimPy PriorityResource
+- Applies severity-dependent boarding service times to model escalation
+  in bed allocation and inpatient handover
 
-  Low/medium severity POCT patients with high confidence (>= 0.75)
-  who are discharged are flagged as fast-tracked.
+Performance metrics:
+- assessment waiting time
+- boarding waiting time
+- boarding waiting time by severity
+- total ED length of stay (LOS)
+- POCT usage and fast-track counts
+- NHS 4-hour target compliance
 
-BOARDING STAGE (Rule-Based):
-  Priority:
-    critical → 1
-    high     → 2
-    medium   → 3
-    low      → 4
-
-  Boarding mean time:
-    critical → 90 min
-    high     → 110 min
-    medium   → 147 min
-    low      → 147 min
-
-This can be interpreted as:
-  - upstream diagnostic acceleration (POCT)
-  - downstream boarding prioritisation and escalation
+This model evaluates whether combining upstream diagnostic acceleration
+with downstream boarding prioritisation improves ED flow more effectively
+than the baseline and rule-based-only simulation variants.
 """
 
 import os

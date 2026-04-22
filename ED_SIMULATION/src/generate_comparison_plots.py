@@ -1,24 +1,44 @@
-# generate_comparison_plots.py
+# src/generate_comparison_plots.py
 """
-Final Comparison Figures — Dataset-Driven Three-Way Simulation Comparison
+Generate comparative figures for the three ED simulation models.
 
-Recommended figure set for dissertation:
+This script creates dissertation-ready visualisations comparing the
+final dataset-driven simulation variants:
 
-1. Baseline vs Rule-Based:
-   Boarding wait by severity
-   -> demonstrates effect of severity-based priority + boarding escalation
+- Baseline model
+- Rule-based AI model
+- Hybrid ML + rule-based model
 
-2. Baseline vs Hybrid:
-   Waiting time by stage
-   -> demonstrates reduction in assessment bottleneck through POCT
+Figures generated:
+1. Boarding wait by severity
+   - compares baseline vs rule-based model
+   - highlights the effect of severity-based boarding priority
 
-3. All 3 models:
-   NHS 4-hour compliance per replication
-   -> system-level performance comparison
+2. Assessment wait comparison
+   - compares all three models
+   - highlights the effect of ML-based POCT acceleration on the
+     upstream assessment bottleneck
 
-4. All 3 models:
-   Summary comparison table
-   -> compact overall comparison of key metrics
+3. Boarding wait mean comparison
+   - compares all three models
+   - shows the downstream impact of prioritisation and escalation
+
+4. Total ED length of stay (LOS) mean comparison
+   - compares all three models
+   - summarises overall system-level improvement
+
+5. NHS 4-hour compliance by replication
+   - compares all three models across repeated runs
+
+6. Summary comparison table
+   - presents key performance metrics in compact tabular form
+
+All figures are saved to:
+    ../figures/
+
+These plots support the final evaluation in Chapter 4 by showing how
+different AI interventions affect bottlenecks, waiting times, total LOS,
+and NHS target compliance.
 """
 
 import os
@@ -355,12 +375,11 @@ ax.legend(fontsize=10, framealpha=0.9)
 fig.tight_layout()
 save_fig(fig, "comparison_boarding_wait_mean.png")
 
-
 # ============================================================
 # FIGURE 4 — TOTAL LOS MEAN: THREE-WAY COMPARISON
 # ============================================================
 
-print("Fig 3: All models — total LOS mean comparison...")
+print("Fig 4: All models — total LOS mean comparison...")
 
 labels = ["Baseline", "Rule-Based", "Hybrid ML + Rule-Based"]
 means  = [
@@ -417,12 +436,11 @@ ax.legend(fontsize=10, framealpha=0.9)
 fig.tight_layout()
 save_fig(fig, "comparison_total_los_mean.png")
 
-
 # ============================================================
 # FIGURE 5 — ALL 3 MODELS: NHS 4-HOUR COMPLIANCE
 # ============================================================
 
-print("Fig 3: All models — NHS 4-hour compliance...")
+print("Fig 5: All models — NHS 4-hour compliance...")
 
 fig, ax = plt.subplots(figsize=(11, 5))
 style_axes(ax)
@@ -463,7 +481,7 @@ save_fig(fig, "comparison_nhs_compliance.png")
 # FIGURE 6 — SUMMARY TABLE
 # ============================================================
 
-print("Fig 4: Summary comparison table...")
+print("Fig 6: Summary comparison table...")
 
 summary_data = [
     ["Metric",                    "Baseline",          "Rule-Based",        "Hybrid ML",          "Best"],
@@ -548,7 +566,7 @@ print("  Final comparison figures generated.")
 print("=" * 60)
 for fname in [
     "comparison_boarding_by_severity.png",
-    "comparison_hybrid_waiting_times.png"
+    "comparison_hybrid_waiting_times.png",
     "comparison_boarding_wait_mean.png",
     "comparison_total_los_mean.png",
     "comparison_nhs_compliance.png",

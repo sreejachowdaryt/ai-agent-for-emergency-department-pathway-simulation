@@ -1,17 +1,22 @@
 # src/extract_activity_gaps_from_mimic.py
 """
-Extract MIMIC-III transfer-based distributions for post-ED admitted pathway modelling.
+Extract MIMIC-III transfer-based distributions for modelling the post-ED inpatient pathway.
 
-What is derived here:
-- p_second_transfer
-- first careunit distribution
-- second careunit distribution
-- conditional second careunit distribution given first careunit
-- careunit stay durations
-- gap between first and second transfer
-- last careunit -> hospital discharge gap
+This script:
+- Uses TRANSFERS and ADMISSIONS tables from MIMIC-III
+- Restricts transfer-based analysis to EMERGENCY admissions to reflect ED-originated pathways
+- Derives:
+  - probability of a second careunit transfer
+  - first careunit distribution
+  - second careunit distribution
+  - conditional transition probabilities between careunits
+  - careunit stay durations
+  - time gap between first and second transfer
+  - time gap from last careunit to hospital discharge
 
-This file no longer models ICU as a separate stage.
+These distributions are used to simulate the admitted patient pathway after ED departure.
+Other attributes (e.g., admission_type) in the synthetic dataset may still include all admission categories.
+
 """
 
 import os

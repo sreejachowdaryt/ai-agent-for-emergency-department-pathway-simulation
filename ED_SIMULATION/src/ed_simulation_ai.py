@@ -1,38 +1,44 @@
-# ed_simulation_ai.py
+# src/ed_simulation_ai.py
 """
 Rule-Based Priority + Escalation Agent ED Simulation — Deliverable 3
 ====================================================================
-AI Agent for Emergency Department Pathway Simulation
-BSc Computer Science with AI, University of Leeds
 
-This version matches the dataset-driven baseline simulation, but adds
-a rule-based boarding intervention.
+This script extends the baseline ED simulation by adding a rule-based
+boarding intervention for non-discharge patients, while keeping the
+same dataset-driven arrival schedule, assessment stage, and outcome structure.
 
 DATASET-DRIVEN ARRIVALS:
   Arrival schedule is read directly from the synthetic ed_cases.csv file.
   This preserves repeated patient admissions and temporal ordering.
   Visits are still processed independently once they enter the simulation.
 
-AI AGENT MECHANISM:
-  When a non-discharge patient requests a boarding slot, the agent:
-    1. assigns a severity-based priority integer
-    2. assigns a severity-based boarding mean time
+AI agent mechanism:
+- Applies severity-based priority when requesting a boarding slot
+- Applies severity-based boarding service times to represent escalation
+  of bed allocation or handover for higher-acuity patients
 
-  Priority:
-    critical → 1
-    high     → 2
-    medium   → 3
-    low      → 4
+Priority mapping:
+- critical -> 1
+- high     -> 2
+- medium   -> 3
+- low      -> 4
 
-  Boarding mean time:
-    critical → 90 min
-    high     → 110 min
-    medium   → 147 min
-    low      → 147 min
+Boarding mean times:
+- critical -> 90 min
+- high     -> 110 min
+- medium   -> 147 min
+- low      -> 147 min
 
-This can be interpreted as a boarding escalation rule:
-higher-acuity patients trigger faster inpatient bed allocation /
-handover processes while also receiving queue priority.
+Performance metrics:
+- assessment waiting time
+- boarding waiting time
+- boarding waiting time by severity
+- total ED length of stay (LOS)
+- NHS 4-hour target compliance
+
+This model is used to evaluate whether rule-based prioritisation can
+reduce boarding delays and improve flow for high-severity patients
+under the same structural resource constraints as the baseline model.
 """
 
 import os

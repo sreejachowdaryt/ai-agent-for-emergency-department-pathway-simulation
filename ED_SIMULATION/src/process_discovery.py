@@ -1,8 +1,17 @@
+# src/create_event_log.py
 """
-Process Discovery using PM4Py
+Perform process discovery on the synthetic ED event log using PM4Py.
 
-This script discovers the Emergency Department workflow from the
-event log using the Inductive Miner algorithm.
+This script:
+- Loads the event log generated from the synthetic ED dataset
+- Converts it into PM4Py format (case_id, activity, timestamp)
+- Applies the Inductive Miner algorithm to discover the process model
+- Generates a process tree representation of the ED workflow
+- Constructs a Directly-Follows Graph (DFG) for behavioural analysis
+- Saves visualisations of both models for interpretation and reporting
+
+These outputs are used to validate that the simulated ED pathways
+produce realistic and interpretable process structures.
 """
 
 import pandas as pd

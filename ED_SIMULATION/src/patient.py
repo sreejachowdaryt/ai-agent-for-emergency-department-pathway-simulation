@@ -1,16 +1,28 @@
-# patient.py
+# src/patient.py
 """
-Patient entity for the ED simulation (ED-only model).
+Patient entity for the ED simulation model.
 
-Timestamps map to the new hybrid ED pathway:
-  Arrival → Assessment (triage+doctor combined) → Boarding (if non-discharge) → Departure
+This class represents an individual patient (case) moving through the
+ED-only simulation pathway:
 
-The old separate triage/doctor stage timestamps are replaced by a
-single assessment stage, matching the dataset's initial_assessment_time proxy.
+Arrival → Assessment → Boarding (if admitted/transferred) → Departure
 
-All times are in simulation hours.
+Model assumptions:
+- The assessment stage combines triage and doctor consultation,
+  consistent with the synthetic dataset proxy:
+      initial_assessment_time − arrival_time
+- Boarding represents the delay between clinical decision and ED exit
+  for non-discharge patients
+
+All timestamps are recorded in simulation time (hours).
+
+The class also provides derived performance metrics:
+- assessment_wait
+- boarding_wait
+- total length of stay (LOS)
+
+These are used for evaluation and simulation output logging.
 """
-
 
 class Patient:
 
