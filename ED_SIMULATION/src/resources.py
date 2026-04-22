@@ -1,35 +1,39 @@
 # resources.py
 """
 ED Resources — calibrated for a mid-sized UK Emergency Department
-receiving 150 patients/day.
+with an effective workload of approximately 150–160 patients/day
+after scaling the synthetic dataset to a 365-day simulation horizon.
 
-Resource capacities are derived using Little's Law (L = λW) targeting
-a utilisation (ρ) of 0.75–0.85 per resource pool, which produces
-realistic queue formation without permanent overload.
+Resource capacities are calibrated using empirical arrival rates
+derived from the dataset, guided by Little's Law (L = λW),
+targeting utilisation (ρ) of approximately 0.80–0.90 per resource pool.
 
-    λ  = 150 patients/day = 6.25 patients/hour
-    ρ  = λ / (c × μ)   where c = capacity, μ = service rate
+    Effective arrival rate: λ ≈ 150 patients/day ≈ 6.25 patients/hour
+    Utilisation: ρ = λ / (c × μ) = λW / c
 
-Resource         Capacity  Service time  ρ      Rationale
------------      --------  ------------  -----  --------------------------
-triage_nurse     2         10 min        0.87   Active nurse assessment time
-doctor           3         20 min        0.83   NHS ED consultation standard
-cubicle          8         30 min        0.78   Triage + treatment combined
-boarding_slot    3         90 min        0.78   ED boarding before ward/ICU
+Resource         Capacity  Service time  ρ       Rationale
+-----------      --------  ------------  ------  --------------------------------
+assessment_bay   5         32.5 min      0.85    Combined triage+doctor proxy
+boarding_slot    7         147 min       0.85    Empirically derived from dataset
+
+NOTE on resource redesign:
+  The hybrid dataset uses a single 'initial_assessment_time - arrival_time'
+  proxy (mean 32.5 min) representing the combined triage and doctor stage.
+  Separate triage nurse, doctor, and cubicle resources are therefore replaced
+  by a single assessment_bay resource.
+
+  Boarding mean = 147 min (from ed_departure_time - boarding_start_time
+  in the MIMIC-IV-ED derived dataset).
+  Non-discharge rate ≈ 39% of 150/day = 58.5 patients/day = 2.44/hour.
+  With 7 slots: ρ = 2.44 × (147/60) / 7 ≈ 0.85, which lies within the
+  target utilisation range.
+  With 3 or 4 slots the system would be overloaded (ρ > 1.0).
 
 NOTE on boarding_slot:
-  In the ED-only model, once a patient is assigned a boarding slot they
-  are recorded as "pending transfer" and depart the ED after a short
-  boarding window (empirically sampled). The slot represents the ED's
-  physical capacity to hold admitted patients while awaiting a ward/ICU
-  bed confirmation. This is the primary bottleneck for non-discharge
-  patients and is where the AI agent intervention has the most impact.
-
-NOTE on triage service time vs triage_duration in data:
-  The triage_duration column in ed_cases.csv (mean ~32 min) represents
-  arrival -> initial_assessment, which INCLUDES queue waiting time.
-  The 10-minute service time here is the active nurse contact time only.
-  Waiting time then emerges naturally from queue dynamics.
+  Represents the ED exit-block period — the patient is medically ready
+  to leave the ED but cannot do so until an inpatient bed is confirmed.
+  This is the main bottleneck for non-discharge patients and the stage
+  where AI-based prioritisation has the greatest effect.
 """
 
 import simpy
@@ -37,19 +41,13 @@ import simpy
 
 class EDResources:
     def __init__(self, env: simpy.Environment):
-        self.triage_nurse  = simpy.Resource(env, capacity=2)
-        self.doctor        = simpy.Resource(env, capacity=3)
-        self.cubicle       = simpy.Resource(env, capacity=8)
-        self.boarding_slot = simpy.Resource(env, capacity=3)
+        self.assessment_bay = simpy.Resource(env, capacity=5)
+        self.boarding_slot  = simpy.Resource(env, capacity=7)
 
     def utilisation_snapshot(self) -> dict:
         return {
-            "triage_nurse_queue":    len(self.triage_nurse.queue),
-            "triage_nurse_in_use":   self.triage_nurse.count,
-            "doctor_queue":          len(self.doctor.queue),
-            "doctor_in_use":         self.doctor.count,
-            "cubicle_queue":         len(self.cubicle.queue),
-            "cubicle_in_use":        self.cubicle.count,
-            "boarding_slot_queue":   len(self.boarding_slot.queue),
-            "boarding_slot_in_use":  self.boarding_slot.count,
+            "assessment_bay_queue":   len(self.assessment_bay.queue),
+            "assessment_bay_in_use":  self.assessment_bay.count,
+            "boarding_slot_queue":    len(self.boarding_slot.queue),
+            "boarding_slot_in_use":   self.boarding_slot.count,
         }

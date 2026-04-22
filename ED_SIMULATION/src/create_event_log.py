@@ -1,159 +1,165 @@
-# create_event_log.py
+# src/create_event_log.py
 """
-Convert the synthetic ED dataset into an event log for process mining.
+Convert the synthetic ED dataset into an ordered event log for process mining.
 
-Each row in ed_cases.csv becomes a TRACE (one patient's journey).
-Each activity within that trace is a timestamped EVENT.
+Each row in ed_cases.csv becomes one TRACE (one patient case).
+Each activity in that trace becomes a timestamped EVENT.
 
-FIX applied vs original version:
-  The original script appended a "Discharge" event for every patient
-  using the discharge_time column, which is populated for ALL patients
-  regardless of outcome. This caused the process tree to show Discharge
-  as the universal terminal activity, misrepresenting ICU and transferred
-  patients.
+This version fixes equal-timestamp ordering issues by assigning
+an explicit event_order so that process mining does not infer
+spurious loops/concurrency.
 
-  The fix: the terminal activity is now determined by callout_outcome:
+Pathway represented:
 
-    callout_outcome    Terminal activity      Timestamp used
-    ---------------    -----------------      --------------
-    DISCHARGED         Discharge              discharge_time
-    CANCELLED          Callout Cancelled      discharge_time
-    TRANSFERRED        Ward2 Transfer Out     second_transfer_out
-                       (already in pathway — no extra event added)
-    ICU                ICU Discharge          icu_discharge_time
-                       (already in pathway — no extra event added)
+DISCHARGED:
+    Arrival -> Initial Assessment -> Discharge
 
-  For TRANSFERRED and ICU patients, the correct terminal activity is
-  already recorded as part of their pathway activities (Ward2 Transfer Out
-  and ICU Discharge respectively). Adding a "Discharge" event on top of
-  those was the source of the misrepresentation.
+ADMITTED:
+    Arrival -> Initial Assessment -> Boarding Start -> ED Departure
+    -> First Careunit In -> First Careunit Out -> Hospital Discharge
 
-Output columns:
-    case_id    — patient case identifier (trace ID for process mining)
-    activity   — activity name
-    timestamp  — datetime of the activity
-    outcome    — callout_outcome (retained as case attribute for filtering)
+TRANSFERRED:
+    Arrival -> Initial Assessment -> Boarding Start -> ED Departure
+    -> First Careunit In -> First Careunit Out
+    -> Second Careunit In -> Second Careunit Out -> Hospital Discharge
 """
 
 import pandas as pd
 
+df = pd.read_csv("../data/event_log.csv")
+df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
+
+df = df.sort_values(["case_id", "timestamp", "event_order"]).reset_index(drop=True)
+df["next_activity"] = df.groupby("case_id")["activity"].shift(-1)
+
+bad = df[
+    (df["activity"] == "Initial Assessment") &
+    (df["next_activity"] == "Arrival")
+]
+
+print("Initial Assessment -> Arrival count:", len(bad))
+print(bad[["case_id", "activity", "timestamp", "next_activity"]].head(10))
+
+ACTIVITY_ORDER = {
+    "Arrival": 1,
+    "Initial Assessment": 2,
+    "Boarding Start": 3,
+    "Discharge": 4,
+    "ED Departure": 5,
+    "First Careunit In": 6,
+    "First Careunit Out": 7,
+    "Second Careunit In": 8,
+    "Second Careunit Out": 9,
+    "Hospital Discharge": 10,
+}
+
+
+def add_event(events, case_id, activity, timestamp, row, outcome):
+    if pd.notna(timestamp):
+        events.append({
+            "case_id": case_id,
+            "activity": activity,
+            "timestamp": timestamp,
+            "event_order": ACTIVITY_ORDER[activity],
+            "pathway_outcome": outcome,
+            "admission_type": row.get("admission_type"),
+            "primary_diagnosis_code": row.get("primary_diagnosis_code"),
+            "discharge_location": row.get("discharge_location"),
+        })
+
 
 def create_event_log(input_path: str, output_path: str):
-
     print("Loading dataset...")
     df = pd.read_csv(input_path)
-    print(f"  {len(df)} cases loaded.")
+    print(f"  {len(df):,} cases loaded.")
+
+    dt_cols = [
+        "arrival_time",
+        "initial_assessment_time",
+        "boarding_start_time",
+        "ed_departure_time",
+        "first_transfer_in",
+        "first_transfer_out",
+        "second_transfer_in",
+        "second_transfer_out",
+        "discharge_time",
+    ]
+
+    for col in dt_cols:
+        if col in df.columns:
+            df[col] = pd.to_datetime(df[col], errors="coerce")
 
     events = []
 
-    # ------------------------------------------------------------------
-    # Activity columns that are ALWAYS added if the timestamp exists.
-    # These form the core pathway backbone for every patient.
-    # "Discharge" is intentionally excluded here — it is handled
-    # conditionally below based on callout_outcome.
-    # ------------------------------------------------------------------
-    pathway_activities = [
-        ("Arrival",              "arrival_time"),
-        ("Initial Assessment",   "initial_assessment_time"),
-        ("Ward1 Transfer In",    "first_transfer_in"),
-        ("Ward1 Transfer Out",   "first_transfer_out"),
-        ("Ward2 Transfer In",    "second_transfer_in"),
-        ("Ward2 Transfer Out",   "second_transfer_out"),
-        ("ICU Admission",        "icu_admission_time"),
-        ("ICU Discharge",        "icu_discharge_time"),
-    ]
-
     for _, row in df.iterrows():
-
         case_id = row["case_id"]
-        outcome = str(row.get("callout_outcome", "")).strip().upper()
+        outcome = str(row.get("pathway_outcome", "")).strip().upper()
 
-        # --- Core pathway activities ---
-        for activity, col in pathway_activities:
-            if col in row and pd.notna(row[col]):
-                events.append({
-                    "case_id":   case_id,
-                    "activity":  activity,
-                    "timestamp": row[col],
-                    "outcome":   outcome,
-                })
+        add_event(events, case_id, "Arrival", row.get("arrival_time"), row, outcome)
+        add_event(events, case_id, "Initial Assessment", row.get("initial_assessment_time"), row, outcome)
 
-        # --- Terminal activity (outcome-dependent) ---
-        if outcome in ("DISCHARGED",):
-            # Standard home discharge
-            if pd.notna(row.get("discharge_time")):
-                events.append({
-                    "case_id":   case_id,
-                    "activity":  "Discharge",
-                    "timestamp": row["discharge_time"],
-                    "outcome":   outcome,
-                })
+        if outcome == "DISCHARGED":
+            add_event(events, case_id, "Discharge", row.get("ed_departure_time"), row, outcome)
 
-        elif outcome == "CANCELLED":
-            # Callout was cancelled — patient disposition redirected
-            # Uses discharge_time as the timestamp of the cancellation event
-            if pd.notna(row.get("discharge_time")):
-                events.append({
-                    "case_id":   case_id,
-                    "activity":  "Callout Cancelled",
-                    "timestamp": row["discharge_time"],
-                    "outcome":   outcome,
-                })
+        elif outcome == "ADMITTED":
+            add_event(events, case_id, "Boarding Start", row.get("boarding_start_time"), row, outcome)
+            add_event(events, case_id, "ED Departure", row.get("ed_departure_time"), row, outcome)
+            add_event(events, case_id, "First Careunit In", row.get("first_transfer_in"), row, outcome)
+            add_event(events, case_id, "First Careunit Out", row.get("first_transfer_out"), row, outcome)
+            add_event(events, case_id, "Hospital Discharge", row.get("discharge_time"), row, outcome)
 
         elif outcome == "TRANSFERRED":
-            # Patient transferred out via Ward2 Transfer Out.
-            # That activity is already added above — no extra terminal event needed.
-            # The trace correctly ends at Ward2 Transfer Out.
-            pass
-
-        elif outcome == "ICU":
-            # Patient escalated to ICU — trace ends at ICU Discharge.
-            # That activity is already added above — no extra terminal event needed.
-            pass
+            add_event(events, case_id, "Boarding Start", row.get("boarding_start_time"), row, outcome)
+            add_event(events, case_id, "ED Departure", row.get("ed_departure_time"), row, outcome)
+            add_event(events, case_id, "First Careunit In", row.get("first_transfer_in"), row, outcome)
+            add_event(events, case_id, "First Careunit Out", row.get("first_transfer_out"), row, outcome)
+            add_event(events, case_id, "Second Careunit In", row.get("second_transfer_in"), row, outcome)
+            add_event(events, case_id, "Second Careunit Out", row.get("second_transfer_out"), row, outcome)
+            add_event(events, case_id, "Hospital Discharge", row.get("discharge_time"), row, outcome)
 
         else:
-            # Unknown outcome — fall back to discharge_time if available
-            if pd.notna(row.get("discharge_time")):
-                events.append({
-                    "case_id":   case_id,
-                    "activity":  "Discharge",
-                    "timestamp": row["discharge_time"],
-                    "outcome":   outcome,
-                })
+            add_event(events, case_id, "ED Departure", row.get("ed_departure_time"), row, outcome)
 
-    # ------------------------------------------------------------------
-    # Build, sort and save the event log
-    # ------------------------------------------------------------------
     event_log = pd.DataFrame(events)
-    event_log["timestamp"] = pd.to_datetime(event_log["timestamp"])
-    event_log = event_log.sort_values(["case_id", "timestamp"]).reset_index(drop=True)
+
+    if event_log.empty:
+        print("No events created.")
+        return
+
+    event_log["timestamp"] = pd.to_datetime(event_log["timestamp"], errors="coerce")
+
+    event_log = (
+        event_log
+        .sort_values(["case_id", "timestamp", "event_order"])
+        .reset_index(drop=True)
+    )
+
     event_log.to_csv(output_path, index=False)
 
-    # ------------------------------------------------------------------
-    # Summary for verification
-    # ------------------------------------------------------------------
     print(f"\nEvent log created: {output_path}")
     print(f"  Total events:  {len(event_log):,}")
     print(f"  Total traces:  {event_log['case_id'].nunique():,}")
-    print(f"\n  Terminal activity distribution:")
-    terminal_events = (
+
+    print("\n  Terminal activity distribution:")
+    terminal = (
         event_log
-        .sort_values("timestamp")
+        .sort_values(["case_id", "timestamp", "event_order"])
         .groupby("case_id")
         .last()["activity"]
         .value_counts()
     )
-    for activity, count in terminal_events.items():
-        pct = count / event_log["case_id"].nunique() * 100
-        print(f"    {activity:<25} {count:>6} ({pct:.1f}%)")
 
-    print(f"\n  Activity event counts:")
+    total_traces = event_log["case_id"].nunique()
+    for activity, count in terminal.items():
+        pct = count / total_traces * 100
+        print(f"    {activity:<30} {count:>6} ({pct:.1f}%)")
+
+    print("\n  All activity event counts:")
     for activity, count in event_log["activity"].value_counts().items():
-        print(f"    {activity:<25} {count:>6}")
+        print(f"    {activity:<30} {count:>6}")
 
 
 if __name__ == "__main__":
-
     create_event_log(
         "../../ER_PATIENTS_FLOW/Synthetic_dataset/data/ed_cases.csv",
         "../data/event_log.csv"

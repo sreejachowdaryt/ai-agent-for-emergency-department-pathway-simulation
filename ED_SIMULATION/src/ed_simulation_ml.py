@@ -1,48 +1,72 @@
-# ed_simulation.py
+# ed_simulation_ml.py
 """
-Baseline ED Simulation — Deliverable 2
-=======================================
+Hybrid ML + Rule-Based Agent ED Simulation — Deliverable 3
+===========================================================
 AI Agent for Emergency Department Pathway Simulation
 BSc Computer Science with AI, University of Leeds
 
-DATASET: Hybrid MIMIC-IV-ED + MIMIC-III synthetic dataset.
-  ED phase (arrival, assessment, boarding) derived from MIMIC-IV-ED edstays.
-  Post-ED inpatient phase (careunit stays) derived from MIMIC-III transfers.
-  Simulation models ED-only pathway; patients exit at boarding handover.
+This version matches the dataset-driven baseline simulation, but adds
+two interventions:
 
-PATIENT PATHWAY:
-  Arrival
-    → wait for assessment bay
-    → assessment (triage + doctor combined, 32.5 min mean)
-    → OUTCOME DECISION
-        discharge   (61.0%) → patient exits immediately
-        admission   (34.6%) → waits for boarding slot → exits ED
-        transferred  (4.4%) → waits for boarding slot → exits ED
+1. ML-based POCT streaming at the assessment stage
+2. Rule-based priority + escalation at the boarding stage
 
-ARRIVALS:
+DATASET-DRIVEN ARRIVALS:
   Arrival schedule is read directly from the synthetic ed_cases.csv file.
-  This preserves repeated patient admissions and their temporal ordering.
+  This preserves repeated patient admissions and temporal ordering.
   Visits are still processed independently once they enter the simulation.
 
-RESOURCES (Little's Law, target ρ = 0.80–0.90):
-  assessment_bay:  5
-  boarding_slot:   7
+HYBRID AGENT MECHANISM:
 
-METRICS:
-  assessment_wait  — arrival → assessment bay available
-  boarding_wait    — assessment end → boarding slot available (non-discharge)
-  total_los        — arrival → ED departure
-  NHS 4-hour compliance — proportion with total_los ≤ 240 min
+ASSESSMENT STAGE (ML POCT):
+  A Random Forest classifier predicts POCT amenability from:
+    - diagnosis code
+    - admission type
+    - careunit
+    - arrival hour
+    - weekday
+    - assessment duration bucket
+
+  If POCT-amenable (probability >= 0.55):
+    critical → 16 min
+    high     → 20 min
+    medium   → 23 min
+    low      → 16 min
+
+  Low/medium severity POCT patients with high confidence (>= 0.75)
+  who are discharged are flagged as fast-tracked.
+
+BOARDING STAGE (Rule-Based):
+  Priority:
+    critical → 1
+    high     → 2
+    medium   → 3
+    low      → 4
+
+  Boarding mean time:
+    critical → 90 min
+    high     → 110 min
+    medium   → 147 min
+    low      → 147 min
+
+This can be interpreted as:
+  - upstream diagnostic acceleration (POCT)
+  - downstream boarding prioritisation and escalation
 """
 
 import os
+import pickle
 import random
 import simpy
 import pandas as pd
 import numpy as np
 
-from resources import EDResources
+from resources_ml import EDResourcesML
 from patient import Patient
+from ai_agent import (
+    get_boarding_priority,
+    get_boarding_service_mean_hours,
+)
 
 # ----------------------------------------------------------
 # CONFIGURATION
@@ -50,28 +74,38 @@ from patient import Patient
 
 NUM_REPLICATIONS   = 10
 SIM_DURATION_HOURS = 365 * 24
-WARMUP_HOURS       = 7  * 24
+WARMUP_HOURS       = 7 * 24
 BASE_SEED          = 42
 
-ARRIVAL_RATE_PER_HOUR = 150 / 24   # kept for reference only
+# kept only as reference
+ARRIVAL_RATE_PER_HOUR = 150 / 24
 
-# Combined assessment stage (triage + doctor proxy)
-# From dataset: initial_assessment_time - arrival_time, mean = 32.5 min
 ASSESSMENT_SERVICE_H = 32.5 / 60
+BOARDING_MEAN_H      = 147 / 60
 
-# Boarding: from dataset (ed_departure_time - boarding_start_time)
-# Mean = 147 min, median = 120 min
-BOARDING_MEAN_H = 147 / 60
+# POCT-adjusted assessment service times (hours)
+POCT_ASSESSMENT_TIME = {
+    "critical": 16.0 / 60,
+    "high":     20.0 / 60,
+    "medium":   23.0 / 60,
+    "low":      16.0 / 60,
+}
+
+POCT_THRESHOLD      = 0.55
+FASTTRACK_THRESHOLD = 0.75
 
 # ----------------------------------------------------------
 # PATHS
 # ----------------------------------------------------------
 
 BRANCH_PATH      = "../data/ed_branch_probabilities.csv"
+LOOKUP_PATH      = "../data/poct_lookup.pkl"
+META_PATH        = "../data/poct_model_meta.pkl"
 ED_CASES_PATH    = "../../ER_PATIENTS_FLOW/Synthetic_dataset/data/ed_cases.csv"
+
 OUT_DIR          = "../data"
-PATIENT_LOG_OUT  = os.path.join(OUT_DIR, "simulation_patient_log.csv")
-SUMMARY_OUT      = os.path.join(OUT_DIR, "simulation_summary.csv")
+PATIENT_LOG_OUT  = os.path.join(OUT_DIR, "simulation_ml_patient_log.csv")
+SUMMARY_OUT      = os.path.join(OUT_DIR, "simulation_ml_summary.csv")
 os.makedirs(OUT_DIR, exist_ok=True)
 
 # ----------------------------------------------------------
@@ -105,7 +139,7 @@ def load_arrival_schedule(path: str) -> pd.DataFrame:
 
 def build_sim_arrival_schedule(df: pd.DataFrame, sim_duration_hours: float) -> pd.DataFrame:
     """
-    Convert real timestamps to simulation hours while preserving ordering
+    Convert dataset timestamps to simulation hours while preserving ordering
     and repeated patient admissions. The full dataset time window is
     linearly mapped into the simulation horizon.
     """
@@ -127,17 +161,54 @@ def build_sim_arrival_schedule(df: pd.DataFrame, sim_duration_hours: float) -> p
     return df[["patient_id", "case_id", "sim_arrival_h"]].copy()
 
 
-print("Loading simulation parameters...")
+print("Loading simulation parameters (hybrid ML + rule-based agent)...")
 branch_probs = load_branch_probabilities(BRANCH_PATH)
 
-print(f"  Assessment mean:   {ASSESSMENT_SERVICE_H*60:.1f} min")
-print(f"  Boarding mean:     {BOARDING_MEAN_H*60:.1f} min")
-print(f"  Branch probs:      discharge={branch_probs['discharge']:.4f}  "
+if not os.path.exists(LOOKUP_PATH):
+    raise FileNotFoundError(
+        f"Lookup table not found: {LOOKUP_PATH}\nRun train_poct_model.py first."
+    )
+
+with open(LOOKUP_PATH, "rb") as f:
+    POCT_LOOKUP = pickle.load(f)
+
+with open(META_PATH, "rb") as f:
+    poct_meta = pickle.load(f)
+
+top_diags   = poct_meta["top_diags"]
+le_admit    = poct_meta["le_admit"]
+le_cu       = poct_meta["le_cu"]
+TOP_N_DIAGS = len(top_diags)
+n_triage    = poct_meta.get("n_triage", 21)
+
+DIAG_TO_IDX  = {str(d): i for i, d in enumerate(top_diags)}
+ADMIT_TO_IDX = {str(c): i for i, c in enumerate(le_admit.classes_)}
+CU_TO_IDX    = {str(c): i for i, c in enumerate(le_cu.classes_)}
+
+print(f"  Assessment mean:        {ASSESSMENT_SERVICE_H*60:.1f} min")
+print(f"  Baseline boarding mean: {BOARDING_MEAN_H*60:.1f} min")
+print(f"  Branch probs:           discharge={branch_probs['discharge']:.4f}  "
       f"admission={branch_probs['admission']:.4f}  "
       f"transferred={branch_probs['transferred']:.4f}")
+print(f"  POCT lookup loaded:     {len(POCT_LOOKUP):,} entries")
+print(f"  CV AUC:                 {poct_meta['auc_cv_mean']:.3f} ± {poct_meta['auc_cv_std']:.3f}")
+print(f"  Test AUC:               {poct_meta.get('test_auc', 'N/A')}")
+print(f"  POCT threshold:         {POCT_THRESHOLD}")
+print(f"  Fast-track threshold:   {FASTTRACK_THRESHOLD}")
+print()
 
 # ----------------------------------------------------------
-# SEVERITY ASSIGNMENT
+# DATASET DISTRIBUTIONS (for feature sampling)
+# ----------------------------------------------------------
+
+_df         = pd.read_csv(ED_CASES_PATH)
+DIAG_CODES  = _df["primary_diagnosis_code"].astype(str).tolist()
+CAREUNITS   = _df["first_careunit"].fillna("UNKNOWN").astype(str).tolist()
+ADMIT_TYPES = _df["admission_type"].fillna("EMERGENCY").astype(str).tolist()
+del _df
+
+# ----------------------------------------------------------
+# SEVERITY / OUTCOME
 # ----------------------------------------------------------
 
 SEVERITY_WEIGHTS = {
@@ -150,23 +221,11 @@ SEVERITY_WEIGHTS = {
 def assign_severity(rng):
     return rng.choices(
         list(SEVERITY_WEIGHTS.keys()),
-        weights=list(SEVERITY_WEIGHTS.values()), k=1
+        weights=list(SEVERITY_WEIGHTS.values()),
+        k=1
     )[0]
 
-# ----------------------------------------------------------
-# OUTCOME SAMPLING
-# ----------------------------------------------------------
-
 def sample_outcome(rng):
-    """
-    Sample outcome using MIMIC-IV-ED derived disposition probabilities.
-    discharge    61.0% — discharged home directly from ED
-    admission    34.6% — admitted to ward (boards in ED first)
-    transferred   4.4% — transferred to another unit (boards in ED first)
-
-    No severity modifier — flat dataset-derived rates.
-    Severity is used only by the AI agent for boarding priority.
-    """
     r = rng.random()
     if r < branch_probs["discharge"]:
         return "discharge"
@@ -175,48 +234,81 @@ def sample_outcome(rng):
     return "transferred"
 
 # ----------------------------------------------------------
+# POCT LOOKUP (O(1))
+# ----------------------------------------------------------
+
+def get_poct_prob(diag_code, admit_type, careunit,
+                  arrival_hour, arrival_weekday, assess_duration_h):
+    d = DIAG_TO_IDX.get(str(diag_code), TOP_N_DIAGS)
+    a = ADMIT_TO_IDX.get(str(admit_type), 0)
+    c = CU_TO_IDX.get(str(careunit), 0)
+    h = int(arrival_hour) % 24
+    w = int(arrival_weekday) % 7
+    t = min(int(round(float(assess_duration_h) * 10)), n_triage - 1)
+    return POCT_LOOKUP.get((d, a, c, h, w, t), 0.5)
+
+# ----------------------------------------------------------
 # PATIENT FLOW
 # ----------------------------------------------------------
 
-def patient_flow(env, patient, resources, rng, completed_list, warmup):
-    """
-    ED-only patient pathway:
-
-    STAGE 1 — Assessment (assessment_bay required)
-      Patient waits for an assessment bay, then receives combined
-      triage + doctor assessment (32.5 min mean, exponential).
-      Released when assessment complete.
-
-    STAGE 2 — Boarding (boarding_slot required, non-discharge only)
-      Patient waits in ED for bed confirmation.
-      Exponential service time, mean 147 min.
-      Patient exits ED when boarding complete.
-
-    Discharge patients exit immediately after assessment.
-    """
-
+def patient_flow(env, patient, resources, rng,
+                 completed_list, warmup, poct_stats):
     patient.arrival_time = env.now
 
-    # ── STAGE 1: ASSESSMENT ───────────────────────────────────────────
+    # Sample clinical features
+    idx        = rng.randint(0, len(DIAG_CODES) - 1)
+    diag_code  = DIAG_CODES[idx]
+    careunit   = CAREUNITS[idx]
+    admit_type = ADMIT_TYPES[idx]
+
+    arrival_hour = int(env.now) % 24
+    arrival_wday = int(env.now / 24) % 7
+
+    # ── STAGE 1: ASSESSMENT with POCT prediction ──────────────────────
+    poct_prob = get_poct_prob(
+        diag_code, admit_type, careunit,
+        arrival_hour, arrival_wday, ASSESSMENT_SERVICE_H
+    )
+    is_poct = poct_prob >= POCT_THRESHOLD
+
+    if is_poct:
+        poct_stats["poct_applied"] += 1
+        assess_time = POCT_ASSESSMENT_TIME[patient.severity]
+    else:
+        assess_time = rng.expovariate(1.0 / ASSESSMENT_SERVICE_H)
+
     with resources.assessment_bay.request() as assess_req:
         yield assess_req
         patient.assessment_start = env.now
-        yield env.timeout(rng.expovariate(1.0 / ASSESSMENT_SERVICE_H))
+        yield env.timeout(assess_time)
         patient.assessment_end = env.now
 
     # ── OUTCOME DECISION ─────────────────────────────────────────────
     outcome = sample_outcome(rng)
+
+    # Fast-track flag (logical marker only; no separate resource pathway)
+    is_fasttrack = (
+        is_poct and
+        poct_prob >= FASTTRACK_THRESHOLD and
+        patient.severity in ("low", "medium") and
+        outcome == "discharge"
+    )
+    if is_fasttrack:
+        poct_stats["fasttrack_applied"] += 1
+
     patient.outcome = outcome
 
-    # ── STAGE 2: BOARDING (non-discharge only) ────────────────────────
+    # ── STAGE 2: BOARDING (non-discharge, priority + escalation) ─────
     if outcome in ("admission", "transferred"):
-        with resources.boarding_slot.request() as board_req:
+        priority = get_boarding_priority(patient.severity)
+        boarding_mean_h = get_boarding_service_mean_hours(patient.severity)
+
+        with resources.boarding_slot.request(priority=priority) as board_req:
             yield board_req
             patient.boarding_start = env.now
-            yield env.timeout(rng.expovariate(1.0 / BOARDING_MEAN_H))
+            yield env.timeout(rng.expovariate(1.0 / boarding_mean_h))
             patient.boarding_end = env.now
 
-    # ── DEPARTURE ────────────────────────────────────────────────────
     patient.departure_time = env.now
 
     if patient.arrival_time >= warmup:
@@ -227,42 +319,38 @@ def patient_flow(env, patient, resources, rng, completed_list, warmup):
 # ----------------------------------------------------------
 
 def generate_arrivals_from_schedule(env, resources, rng, completed_list,
-                                    warmup, arrival_schedule):
-    """
-    Generate arrivals directly from the synthetic dataset schedule.
-    Repeated patient_id values naturally preserve multi-admission structure
-    in the arrival stream.
-    """
+                                    warmup, arrival_schedule, poct_stats):
     for row in arrival_schedule.itertuples(index=False):
         delay = float(row.sim_arrival_h) - env.now
         if delay > 0:
             yield env.timeout(delay)
 
         patient = Patient(case_id=int(row.case_id), severity=assign_severity(rng))
-
-        # attach patient_id dynamically so it can be written to logs
         patient.patient_id = int(row.patient_id)
 
-        env.process(patient_flow(env, patient, resources, rng, completed_list, warmup))
+        env.process(patient_flow(
+            env, patient, resources, rng,
+            completed_list, warmup, poct_stats
+        ))
 
 # ----------------------------------------------------------
 # SINGLE REPLICATION
 # ----------------------------------------------------------
 
 def run_replication(rep_id, arrival_schedule):
-    seed      = BASE_SEED + rep_id
-    rng       = random.Random(seed)
-    env       = simpy.Environment()
-    resources = EDResources(env)
-    completed = []
+    seed       = BASE_SEED + rep_id
+    rng        = random.Random(seed)
+    env        = simpy.Environment()
+    resources  = EDResourcesML(env)
+    completed  = []
+    poct_stats = {"poct_applied": 0, "fasttrack_applied": 0}
 
-    env.process(
-        generate_arrivals_from_schedule(
-            env, resources, rng, completed, WARMUP_HOURS, arrival_schedule
-        )
-    )
+    env.process(generate_arrivals_from_schedule(
+        env, resources, rng, completed,
+        WARMUP_HOURS, arrival_schedule, poct_stats
+    ))
     env.run(until=SIM_DURATION_HOURS)
-    return completed
+    return completed, poct_stats
 
 # ----------------------------------------------------------
 # METRICS
@@ -274,21 +362,26 @@ def smax(v):    return float(np.max(_valid(v)))           if _valid(v) else 0.0
 def spct(v, p): return float(np.percentile(_valid(v), p)) if _valid(v) else 0.0
 
 
-def compute_metrics(patients):
+def compute_metrics(patients, poct_stats):
     n = len(patients)
     if n == 0:
         return {}
-    outcomes       = [p.outcome         for p in patients]
-    assess_waits   = [p.assessment_wait for p in patients]
-    boarding_waits = [p.boarding_wait   for p in patients
-                      if p.outcome in ("admission", "transferred")]
-    total_los      = [p.total_los       for p in patients]
 
-    return {
+    outcomes       = [p.outcome for p in patients]
+    assess_waits   = [p.assessment_wait for p in patients]
+    boarding_waits = [
+        p.boarding_wait for p in patients
+        if p.outcome in ("admission", "transferred")
+    ]
+    total_los      = [p.total_los for p in patients]
+
+    base = {
         "n_patients":            n,
         "n_discharge":           outcomes.count("discharge"),
         "n_admission":           outcomes.count("admission"),
         "n_transferred":         outcomes.count("transferred"),
+        "n_poct_applied":        poct_stats["poct_applied"],
+        "n_fasttrack":           poct_stats["fasttrack_applied"],
 
         "assessment_wait_mean":  smean(assess_waits),
         "assessment_wait_p95":   spct(assess_waits, 95),
@@ -303,19 +396,32 @@ def compute_metrics(patients):
         "total_los_max":         smax(total_los),
     }
 
+    for sev in ["critical", "high", "medium", "low"]:
+        waits = [
+            p.boarding_wait for p in patients
+            if p.outcome in ("admission", "transferred")
+            and p.severity == sev
+            and p.boarding_wait is not None
+        ]
+        base[f"boarding_wait_{sev}_mean"] = float(np.mean(waits)) if waits else 0.0
+
+    return base
+
 # ----------------------------------------------------------
 # PRINT
 # ----------------------------------------------------------
 
 def print_summary(m, label=""):
     n = max(m.get("n_patients", 1), 1)
-    print(f"\n{'='*56}")
+    print(f"\n{'='*58}")
     print(f"  {label}")
-    print(f"{'='*56}")
+    print(f"{'='*58}")
     print(f"  Patients:              {m.get('n_patients',0):>6}")
     print(f"  Discharge:             {m.get('n_discharge',0):>6}  ({m.get('n_discharge',0)/n*100:.1f}%)")
     print(f"  Admission:             {m.get('n_admission',0):>6}  ({m.get('n_admission',0)/n*100:.1f}%)")
     print(f"  Transferred:           {m.get('n_transferred',0):>6}  ({m.get('n_transferred',0)/n*100:.1f}%)")
+    print(f"  POCT applied:          {m.get('n_poct_applied',0):>6}  ({m.get('n_poct_applied',0)/n*100:.1f}%)")
+    print(f"  Fast-tracked:          {m.get('n_fasttrack',0):>6}  ({m.get('n_fasttrack',0)/n*100:.1f}%)")
     print(f"  ---")
     print(f"  Assessment wait mean:  {m.get('assessment_wait_mean',0)*60:>7.2f} min")
     print(f"  Assessment wait p95:   {m.get('assessment_wait_p95',0)*60:>7.2f} min")
@@ -332,31 +438,38 @@ def run_simulation():
     raw_arrivals = load_arrival_schedule(ED_CASES_PATH)
     arrival_schedule = build_sim_arrival_schedule(raw_arrivals, SIM_DURATION_HOURS)
 
-    print(f"\n{'='*56}")
-    print("  Baseline ED Simulation")
+    print(f"\n{'='*58}")
+    print("  Hybrid ML + Rule-Based Agent Simulation")
     print(f"  Arrival source: dataset-driven schedule (ed_cases.csv)")
     print(f"  Visits per replication: {len(arrival_schedule):,}")
     print(f"  Unique patients:        {arrival_schedule['patient_id'].nunique():,}")
     print(f"  Replications:          {NUM_REPLICATIONS}")
     print(f"  Horizon:               {SIM_DURATION_HOURS//24} days")
     print(f"  Warm-up:               {WARMUP_HOURS//24} days")
-    print(f"{'='*56}\n")
+    print(f"  Agent:                 ML POCT + priority/escalation boarding")
+    print(f"  Inference:             Precomputed lookup table (O(1))")
+    print(f"{'='*58}\n")
 
     all_metrics  = []
     all_patients = []
 
     for rep in range(1, NUM_REPLICATIONS + 1):
         print(f"Running replication {rep}/{NUM_REPLICATIONS}...", end=" ", flush=True)
-        patients = run_replication(rep, arrival_schedule)
-        print(f"done — {len(patients):,} patients.")
-        m = compute_metrics(patients)
+        patients, poct_stats = run_replication(rep, arrival_schedule)
+        print(f"done — {len(patients):,} patients  "
+              f"(POCT: {poct_stats['poct_applied']:,}, "
+              f"fast-track: {poct_stats['fasttrack_applied']:,})")
+
+        m = compute_metrics(patients, poct_stats)
         m["replication"] = rep
         all_metrics.append(m)
+
         for p in patients:
             row = p.to_dict()
             row["patient_id"] = getattr(p, "patient_id", None)
             row["replication"] = rep
             all_patients.append(row)
+
         print_summary(m, label=f"Replication {rep}")
 
     mdf  = pd.DataFrame(all_metrics)
@@ -364,17 +477,19 @@ def run_simulation():
     mu   = mdf[cols].mean()
     sd   = mdf[cols].std()
 
-    print(f"\n{'='*56}")
-    print("  SUMMARY ACROSS ALL REPLICATIONS  (mean ± std)")
-    print(f"{'='*56}")
+    print(f"\n{'='*58}")
+    print(f"  ML AGENT SUMMARY  (mean ± std, {NUM_REPLICATIONS} replications)")
+    print(f"{'='*58}")
     for col in cols:
         if any(x in col for x in ["wait", "los"]):
-            print(f"  {col:<30} {mu[col]*60:>8.2f} min  ±  {sd[col]*60:.2f} min")
+            print(f"  {col:<40} {mu[col]*60:>8.2f} min  ±  {sd[col]*60:.2f} min")
         else:
-            print(f"  {col:<30} {mu[col]:>8.1f}      ±  {sd[col]:.1f}")
+            print(f"  {col:<40} {mu[col]:>8.1f}      ±  {sd[col]:.1f}")
 
-    four_hour = [1 if p.get("total_los", 999) <= 4.0 else 0
-                 for p in all_patients if p.get("total_los") is not None]
+    four_hour = [
+        1 if p.get("total_los", 999) <= 4.0 else 0
+        for p in all_patients if p.get("total_los") is not None
+    ]
     if four_hour:
         pct = sum(four_hour) / len(four_hour) * 100
         print(f"\n  NHS 4-hour compliance:  {pct:.1f}%  (target ≥95%)")

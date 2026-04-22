@@ -1,38 +1,38 @@
-# ed_simulation.py
+# ed_simulation_ai.py
 """
-Baseline ED Simulation — Deliverable 2
-=======================================
+Rule-Based Priority + Escalation Agent ED Simulation — Deliverable 3
+====================================================================
 AI Agent for Emergency Department Pathway Simulation
 BSc Computer Science with AI, University of Leeds
 
-DATASET: Hybrid MIMIC-IV-ED + MIMIC-III synthetic dataset.
-  ED phase (arrival, assessment, boarding) derived from MIMIC-IV-ED edstays.
-  Post-ED inpatient phase (careunit stays) derived from MIMIC-III transfers.
-  Simulation models ED-only pathway; patients exit at boarding handover.
+This version matches the dataset-driven baseline simulation, but adds
+a rule-based boarding intervention.
 
-PATIENT PATHWAY:
-  Arrival
-    → wait for assessment bay
-    → assessment (triage + doctor combined, 32.5 min mean)
-    → OUTCOME DECISION
-        discharge   (61.0%) → patient exits immediately
-        admission   (34.6%) → waits for boarding slot → exits ED
-        transferred  (4.4%) → waits for boarding slot → exits ED
-
-ARRIVALS:
+DATASET-DRIVEN ARRIVALS:
   Arrival schedule is read directly from the synthetic ed_cases.csv file.
-  This preserves repeated patient admissions and their temporal ordering.
+  This preserves repeated patient admissions and temporal ordering.
   Visits are still processed independently once they enter the simulation.
 
-RESOURCES (Little's Law, target ρ = 0.80–0.90):
-  assessment_bay:  5
-  boarding_slot:   7
+AI AGENT MECHANISM:
+  When a non-discharge patient requests a boarding slot, the agent:
+    1. assigns a severity-based priority integer
+    2. assigns a severity-based boarding mean time
 
-METRICS:
-  assessment_wait  — arrival → assessment bay available
-  boarding_wait    — assessment end → boarding slot available (non-discharge)
-  total_los        — arrival → ED departure
-  NHS 4-hour compliance — proportion with total_los ≤ 240 min
+  Priority:
+    critical → 1
+    high     → 2
+    medium   → 3
+    low      → 4
+
+  Boarding mean time:
+    critical → 90 min
+    high     → 110 min
+    medium   → 147 min
+    low      → 147 min
+
+This can be interpreted as a boarding escalation rule:
+higher-acuity patients trigger faster inpatient bed allocation /
+handover processes while also receiving queue priority.
 """
 
 import os
@@ -41,8 +41,13 @@ import simpy
 import pandas as pd
 import numpy as np
 
-from resources import EDResources
+from resources_ai import EDResourcesAI
 from patient import Patient
+from ai_agent import (
+    get_boarding_priority,
+    get_boarding_service_mean_hours,
+    describe_agent,
+)
 
 # ----------------------------------------------------------
 # CONFIGURATION
@@ -50,17 +55,16 @@ from patient import Patient
 
 NUM_REPLICATIONS   = 10
 SIM_DURATION_HOURS = 365 * 24
-WARMUP_HOURS       = 7  * 24
+WARMUP_HOURS       = 7 * 24
 BASE_SEED          = 42
 
-ARRIVAL_RATE_PER_HOUR = 150 / 24   # kept for reference only
+# kept only as baseline reference in print/docstring
+ARRIVAL_RATE_PER_HOUR = 150 / 24
 
 # Combined assessment stage (triage + doctor proxy)
-# From dataset: initial_assessment_time - arrival_time, mean = 32.5 min
 ASSESSMENT_SERVICE_H = 32.5 / 60
 
-# Boarding: from dataset (ed_departure_time - boarding_start_time)
-# Mean = 147 min, median = 120 min
+# Baseline boarding mean (reference)
 BOARDING_MEAN_H = 147 / 60
 
 # ----------------------------------------------------------
@@ -70,8 +74,8 @@ BOARDING_MEAN_H = 147 / 60
 BRANCH_PATH      = "../data/ed_branch_probabilities.csv"
 ED_CASES_PATH    = "../../ER_PATIENTS_FLOW/Synthetic_dataset/data/ed_cases.csv"
 OUT_DIR          = "../data"
-PATIENT_LOG_OUT  = os.path.join(OUT_DIR, "simulation_patient_log.csv")
-SUMMARY_OUT      = os.path.join(OUT_DIR, "simulation_summary.csv")
+PATIENT_LOG_OUT  = os.path.join(OUT_DIR, "simulation_ai_patient_log.csv")
+SUMMARY_OUT      = os.path.join(OUT_DIR, "simulation_ai_summary.csv")
 os.makedirs(OUT_DIR, exist_ok=True)
 
 # ----------------------------------------------------------
@@ -105,7 +109,7 @@ def load_arrival_schedule(path: str) -> pd.DataFrame:
 
 def build_sim_arrival_schedule(df: pd.DataFrame, sim_duration_hours: float) -> pd.DataFrame:
     """
-    Convert real timestamps to simulation hours while preserving ordering
+    Convert dataset timestamps to simulation hours while preserving ordering
     and repeated patient admissions. The full dataset time window is
     linearly mapped into the simulation horizon.
     """
@@ -127,17 +131,20 @@ def build_sim_arrival_schedule(df: pd.DataFrame, sim_duration_hours: float) -> p
     return df[["patient_id", "case_id", "sim_arrival_h"]].copy()
 
 
-print("Loading simulation parameters...")
+print("Loading simulation parameters (rule-based AI agent)...")
 branch_probs = load_branch_probabilities(BRANCH_PATH)
 
-print(f"  Assessment mean:   {ASSESSMENT_SERVICE_H*60:.1f} min")
-print(f"  Boarding mean:     {BOARDING_MEAN_H*60:.1f} min")
-print(f"  Branch probs:      discharge={branch_probs['discharge']:.4f}  "
+print(f"  Assessment mean:       {ASSESSMENT_SERVICE_H*60:.1f} min")
+print(f"  Baseline boarding mean:{BOARDING_MEAN_H*60:.1f} min")
+print(f"  Branch probs:          discharge={branch_probs['discharge']:.4f}  "
       f"admission={branch_probs['admission']:.4f}  "
       f"transferred={branch_probs['transferred']:.4f}")
+print()
+print(describe_agent())
+print()
 
 # ----------------------------------------------------------
-# SEVERITY ASSIGNMENT
+# SEVERITY / OUTCOME
 # ----------------------------------------------------------
 
 SEVERITY_WEIGHTS = {
@@ -150,23 +157,11 @@ SEVERITY_WEIGHTS = {
 def assign_severity(rng):
     return rng.choices(
         list(SEVERITY_WEIGHTS.keys()),
-        weights=list(SEVERITY_WEIGHTS.values()), k=1
+        weights=list(SEVERITY_WEIGHTS.values()),
+        k=1
     )[0]
 
-# ----------------------------------------------------------
-# OUTCOME SAMPLING
-# ----------------------------------------------------------
-
 def sample_outcome(rng):
-    """
-    Sample outcome using MIMIC-IV-ED derived disposition probabilities.
-    discharge    61.0% — discharged home directly from ED
-    admission    34.6% — admitted to ward (boards in ED first)
-    transferred   4.4% — transferred to another unit (boards in ED first)
-
-    No severity modifier — flat dataset-derived rates.
-    Severity is used only by the AI agent for boarding priority.
-    """
     r = rng.random()
     if r < branch_probs["discharge"]:
         return "discharge"
@@ -175,45 +170,38 @@ def sample_outcome(rng):
     return "transferred"
 
 # ----------------------------------------------------------
-# PATIENT FLOW
+# PATIENT FLOW — AI AGENT VERSION
 # ----------------------------------------------------------
 
 def patient_flow(env, patient, resources, rng, completed_list, warmup):
     """
-    ED-only patient pathway:
-
-    STAGE 1 — Assessment (assessment_bay required)
-      Patient waits for an assessment bay, then receives combined
-      triage + doctor assessment (32.5 min mean, exponential).
-      Released when assessment complete.
-
-    STAGE 2 — Boarding (boarding_slot required, non-discharge only)
-      Patient waits in ED for bed confirmation.
-      Exponential service time, mean 147 min.
-      Patient exits ED when boarding complete.
-
-    Discharge patients exit immediately after assessment.
+    Baseline flow with rule-based intervention at boarding:
+      1. severity-based priority
+      2. severity-based boarding escalation (faster boarding for
+         critical/high cases)
     """
-
     patient.arrival_time = env.now
 
-    # ── STAGE 1: ASSESSMENT ───────────────────────────────────────────
+    # ── STAGE 1: ASSESSMENT (unchanged) ──────────────────────────────
     with resources.assessment_bay.request() as assess_req:
         yield assess_req
         patient.assessment_start = env.now
         yield env.timeout(rng.expovariate(1.0 / ASSESSMENT_SERVICE_H))
         patient.assessment_end = env.now
 
-    # ── OUTCOME DECISION ─────────────────────────────────────────────
+    # ── OUTCOME DECISION (unchanged) ─────────────────────────────────
     outcome = sample_outcome(rng)
     patient.outcome = outcome
 
-    # ── STAGE 2: BOARDING (non-discharge only) ────────────────────────
+    # ── STAGE 2: BOARDING — AI AGENT ACTIVE HERE ─────────────────────
     if outcome in ("admission", "transferred"):
-        with resources.boarding_slot.request() as board_req:
+        priority = get_boarding_priority(patient.severity)
+        boarding_mean_h = get_boarding_service_mean_hours(patient.severity)
+
+        with resources.boarding_slot.request(priority=priority) as board_req:
             yield board_req
             patient.boarding_start = env.now
-            yield env.timeout(rng.expovariate(1.0 / BOARDING_MEAN_H))
+            yield env.timeout(rng.expovariate(1.0 / boarding_mean_h))
             patient.boarding_end = env.now
 
     # ── DEPARTURE ────────────────────────────────────────────────────
@@ -239,8 +227,6 @@ def generate_arrivals_from_schedule(env, resources, rng, completed_list,
             yield env.timeout(delay)
 
         patient = Patient(case_id=int(row.case_id), severity=assign_severity(rng))
-
-        # attach patient_id dynamically so it can be written to logs
         patient.patient_id = int(row.patient_id)
 
         env.process(patient_flow(env, patient, resources, rng, completed_list, warmup))
@@ -253,7 +239,7 @@ def run_replication(rep_id, arrival_schedule):
     seed      = BASE_SEED + rep_id
     rng       = random.Random(seed)
     env       = simpy.Environment()
-    resources = EDResources(env)
+    resources = EDResourcesAI(env)
     completed = []
 
     env.process(
@@ -278,13 +264,28 @@ def compute_metrics(patients):
     n = len(patients)
     if n == 0:
         return {}
-    outcomes       = [p.outcome         for p in patients]
-    assess_waits   = [p.assessment_wait for p in patients]
-    boarding_waits = [p.boarding_wait   for p in patients
-                      if p.outcome in ("admission", "transferred")]
-    total_los      = [p.total_los       for p in patients]
 
-    return {
+    outcomes       = [p.outcome for p in patients]
+    assess_waits   = [p.assessment_wait for p in patients]
+    boarding_waits = [
+        p.boarding_wait for p in patients
+        if p.outcome in ("admission", "transferred")
+    ]
+    total_los      = [p.total_los for p in patients]
+
+    boarding_by_sev = {}
+    for sev in ["critical", "high", "medium", "low"]:
+        waits = [
+            p.boarding_wait for p in patients
+            if p.outcome in ("admission", "transferred")
+            and p.severity == sev
+            and p.boarding_wait is not None
+        ]
+        boarding_by_sev[f"boarding_wait_{sev}_mean"] = (
+            float(np.mean(waits)) if waits else 0.0
+        )
+
+    base = {
         "n_patients":            n,
         "n_discharge":           outcomes.count("discharge"),
         "n_admission":           outcomes.count("admission"),
@@ -302,6 +303,8 @@ def compute_metrics(patients):
         "total_los_p95":         spct(total_los, 95),
         "total_los_max":         smax(total_los),
     }
+    base.update(boarding_by_sev)
+    return base
 
 # ----------------------------------------------------------
 # PRINT
@@ -309,9 +312,9 @@ def compute_metrics(patients):
 
 def print_summary(m, label=""):
     n = max(m.get("n_patients", 1), 1)
-    print(f"\n{'='*56}")
+    print(f"\n{'='*58}")
     print(f"  {label}")
-    print(f"{'='*56}")
+    print(f"{'='*58}")
     print(f"  Patients:              {m.get('n_patients',0):>6}")
     print(f"  Discharge:             {m.get('n_discharge',0):>6}  ({m.get('n_discharge',0)/n*100:.1f}%)")
     print(f"  Admission:             {m.get('n_admission',0):>6}  ({m.get('n_admission',0)/n*100:.1f}%)")
@@ -323,6 +326,10 @@ def print_summary(m, label=""):
     print(f"  Boarding wait p95:     {m.get('boarding_wait_p95',0)*60:>7.2f} min")
     print(f"  Total LOS mean:        {m.get('total_los_mean',0)*60:>7.2f} min")
     print(f"  Total LOS p95:         {m.get('total_los_p95',0)*60:>7.2f} min")
+    print(f"  ---  Boarding wait by severity  ---")
+    for sev in ["critical", "high", "medium", "low"]:
+        print(f"  {sev:<10} boarding wait: "
+              f"{m.get(f'boarding_wait_{sev}_mean', 0)*60:>7.2f} min")
 
 # ----------------------------------------------------------
 # MAIN
@@ -332,15 +339,16 @@ def run_simulation():
     raw_arrivals = load_arrival_schedule(ED_CASES_PATH)
     arrival_schedule = build_sim_arrival_schedule(raw_arrivals, SIM_DURATION_HOURS)
 
-    print(f"\n{'='*56}")
-    print("  Baseline ED Simulation")
+    print(f"\n{'='*58}")
+    print("  Rule-Based Priority + Escalation Agent Simulation")
     print(f"  Arrival source: dataset-driven schedule (ed_cases.csv)")
     print(f"  Visits per replication: {len(arrival_schedule):,}")
     print(f"  Unique patients:        {arrival_schedule['patient_id'].nunique():,}")
     print(f"  Replications:          {NUM_REPLICATIONS}")
     print(f"  Horizon:               {SIM_DURATION_HOURS//24} days")
     print(f"  Warm-up:               {WARMUP_HOURS//24} days")
-    print(f"{'='*56}\n")
+    print(f"  Agent:                 Severity-weighted boarding priority + escalation")
+    print(f"{'='*58}\n")
 
     all_metrics  = []
     all_patients = []
@@ -364,17 +372,19 @@ def run_simulation():
     mu   = mdf[cols].mean()
     sd   = mdf[cols].std()
 
-    print(f"\n{'='*56}")
-    print("  SUMMARY ACROSS ALL REPLICATIONS  (mean ± std)")
-    print(f"{'='*56}")
+    print(f"\n{'='*58}")
+    print("  AI AGENT SUMMARY  (mean ± std, 10 replications)")
+    print(f"{'='*58}")
     for col in cols:
         if any(x in col for x in ["wait", "los"]):
-            print(f"  {col:<30} {mu[col]*60:>8.2f} min  ±  {sd[col]*60:.2f} min")
+            print(f"  {col:<38} {mu[col]*60:>8.2f} min  ±  {sd[col]*60:.2f} min")
         else:
-            print(f"  {col:<30} {mu[col]:>8.1f}      ±  {sd[col]:.1f}")
+            print(f"  {col:<38} {mu[col]:>8.1f}      ±  {sd[col]:.1f}")
 
-    four_hour = [1 if p.get("total_los", 999) <= 4.0 else 0
-                 for p in all_patients if p.get("total_los") is not None]
+    four_hour = [
+        1 if p.get("total_los", 999) <= 4.0 else 0
+        for p in all_patients if p.get("total_los") is not None
+    ]
     if four_hour:
         pct = sum(four_hour) / len(four_hour) * 100
         print(f"\n  NHS 4-hour compliance:  {pct:.1f}%  (target ≥95%)")
