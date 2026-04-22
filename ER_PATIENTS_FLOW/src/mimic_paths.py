@@ -21,4 +21,5 @@ def get_mimic_paths(mimic_dir: str) -> dict:
         "ICUSTAYS": find_file(mimic_dir, "ICUSTAYS.csv"),
         "CALLOUT": find_file(mimic_dir, "CALLOUT.csv"),
         "DIAGNOSES_ICD": find_file(mimic_dir, "DIAGNOSES_ICD.csv"),
+        "EDSTAYS": find_file(mimic_dir,"edstays.csv"),
     }

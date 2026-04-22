@@ -1,2 +1,2 @@
-p_second_transfer,p_icu_raw,p_icu,target_icu_cap,used_emergency_filter
-0.10975141568288703,0.9,0.15,0.15,True
+p_second_transfer,used_emergency_filter
+0.10975141568288703,True

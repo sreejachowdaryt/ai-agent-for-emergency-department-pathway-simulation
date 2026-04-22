@@ -4,10 +4,13 @@ Reference_mimic_iii/
 # Python
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
 
 # Virtual environment
 .venv/
 venv/
+env/
 
 # Notebook checkpoints
 .ipynb_checkpoints/
@@ -17,3 +20,25 @@ venv/
 
 # OS
 .DS_Store
+Thumbs.db
+
+# Large simulation output files — results CSVs are reproducible by running the pipeline
+ED_SIMULATION/data/simulation_patient_log.csv
+ED_SIMULATION/data/simulation_ai_patient_log.csv
+ED_SIMULATION/data/simulation_ml_patient_log.csv
+
+# Trained ML model binaries — reproducible by running train_poct_model.py
+ED_SIMULATION/data/poct_model.pkl
+ED_SIMULATION/data/poct_model_meta.pkl
+ED_SIMULATION/data/poct_lookup.pkl
+
+# Python packaging
+*.egg-info/
+dist/
+build/
+
+# Pytest
+.pytest_cache/
+
+# Environment variables
+.env

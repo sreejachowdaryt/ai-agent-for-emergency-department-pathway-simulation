@@ -1,11 +1,11 @@
 from,to,count,total,probability
-Arrival,Initial Assessment,11279,11279,1.0
-ICU Admission,ICU Discharge,1741,1741,1.0
-Initial Assessment,Ward1 Transfer In,11279,11279,1.0
-Ward1 Transfer In,Ward1 Transfer Out,11279,11279,1.0
-Ward1 Transfer Out,Discharge,7347,11279,0.6513875343558826
-Ward1 Transfer Out,ICU Admission,1541,11279,0.13662558737476727
-Ward1 Transfer Out,Ward2 Transfer In,1297,11279,0.11499246387091054
-Ward1 Transfer Out,Callout Cancelled,1094,11279,0.09699441439843957
-Ward2 Transfer In,Ward2 Transfer Out,1297,1297,1.0
-Ward2 Transfer Out,ICU Admission,200,200,1.0
+Arrival,Initial Assessment,56511,56511,1.0
+Boarding Start,ED Departure,21951,21951,1.0
+ED Departure,First Careunit In,21951,21951,1.0
+First Careunit In,First Careunit Out,21951,21951,1.0
+First Careunit Out,Hospital Discharge,19566,21951,0.8913489134891349
+First Careunit Out,Second Careunit In,2385,21951,0.10865108651086511
+Initial Assessment,Discharge,34560,56511,0.6115623506927855
+Initial Assessment,Boarding Start,21951,56511,0.3884376493072145
+Second Careunit In,Second Careunit Out,2385,2385,1.0
+Second Careunit Out,Hospital Discharge,2385,2385,1.0

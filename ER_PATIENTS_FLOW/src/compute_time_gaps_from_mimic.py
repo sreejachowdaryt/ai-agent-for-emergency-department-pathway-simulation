@@ -4,6 +4,7 @@ import os
 import pandas as pd
 import numpy as np
 
+
 def find_file(root_dir: str, filename: str) -> str:
     """
     Search for filename anywhere under root_dir and return the first match.
@@ -14,8 +15,14 @@ def find_file(root_dir: str, filename: str) -> str:
             return os.path.join(root, filename)
     raise FileNotFoundError(f"Could not find {filename} under: {root_dir}")
 
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(BASE_DIR)
+
 MIMIC_DIR = os.path.join(PROJECT_ROOT, "..", "Reference_mimic_iii")
+OUT_DIR = os.path.join(PROJECT_ROOT, "Synthetic_dataset", "data")
+os.makedirs(OUT_DIR, exist_ok=True)
+
 admissions_path = find_file(MIMIC_DIR, "ADMISSIONS.csv")
 
 
@@ -47,7 +54,7 @@ def main():
 
     gaps_days = np.array(gaps_days)
 
-    out_path = os.path.join("Synthetic_dataset", "data", "mimic_interadmission_gaps_days.csv")
+    out_path = os.path.join(OUT_DIR, "mimic_interadmission_gaps_days.csv")
     pd.DataFrame({"gap_days": gaps_days}).to_csv(out_path, index=False)
     print("Saved gaps to:", out_path)
 
@@ -56,8 +63,9 @@ def main():
     print(f"Mean gap: {gaps_days.mean():.2f} days")
     print(f"Std gap: {gaps_days.std(ddof=1):.2f} days")
     print(f"Median gap: {np.median(gaps_days):.2f} days")
-    print(f"95th percentile: {np.percentile(gaps_days,95):.2f} days")
+    print(f"95th percentile: {np.percentile(gaps_days, 95):.2f} days")
     print(f"Max gap: {gaps_days.max():.2f} days")
+
 
 if __name__ == "__main__":
     main()
