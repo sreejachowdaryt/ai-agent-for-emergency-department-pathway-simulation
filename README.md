@@ -11,17 +11,17 @@ COMP3931 Individual Project | University of Leeds | 2025/26
 
 ## Overview
 
-This project investigates how Artificial Intelligence (AI) can be used to simulate and optimise patient flow within an Emergency Department (ED). It combines synthetic data generation, process mining, and discrete-event simulation to model realistic ED pathways and evaluate the impact of AI-driven decision-making.
+This project investigates how Artificial Intelligence (AI) can be used to simulate and optimise patient flow within an Emergency Department (ED). It combines synthetic data generation, process mining, and discrete-event simulation (DES) to model realistic ED pathways and evaluate the impact of AI-driven decision-making.
 
-The system replicates the journey of patients from arrival through assessment, treatment, and discharge or admission/transferred, and introduces AI-based interventions to improve efficiency, prioritisation and system-leve performnace.
+The system models the full patient pathway from arrival through assessment, treatment, and discharge or admission/transferred, and introduces AI-based decision-support mechanisms to improve system efficiency, prioritisation and overall operational performnace.
 
 ---
 
 ## Objectives
 
-- Design a realistic simulation of ED patient flow using synthetic dataset
-- Develop an AI agent for prioritisation and operational decision-making
-- Integrate the AI agent into a discrete-event simulation (DES)
+- Develop a realistic simulation of ED patient flow using fully synthetic dataset
+- Design an AI agent for prioritisation and operational decision-making
+- Integrate the AI agent into a discrete-event simulation (DES) framework
 - Compare baseline and AI-driven system performance
 - Evaluate improvements in waiting time, length of stay, and NHS compliance
 
@@ -50,12 +50,12 @@ AI-AGENT-FOR-EMERGENCY-DEPARTMENT-PATHWAY-SIMULATION/
 │   │   ├── extract_ed_simulation_parameters.py
 │   │   ├── ed_simulation.py              # Baseline DES
 │   │   ├── ed_simulation_ai.py           # Rule-based AI
-│   │   ├── ed_simulation_ml.py           # Hybrid ML + rule-based
+│   │   ├── ed_simulation_ml.py           # Hybrid (ML + rule-based)
 │   │   ├── ai_agent.py
 │   │   └── ...
 │   │
 │   ├── data/                     # Generated datasets & simulation outputs
-│   └── figures/                  # Dissertation figures
+│   └── figures/                  # Three-way comparison figures
 │
 ├── Reference_mimic_iii/          # Reference schemas (not used directly)
 ├── requirements.txt
@@ -75,14 +75,13 @@ A hybrid dataset is generated using statistical distributions derived from:
 
 The dataset:
 - preserves temporal consistency
-- models repeated patient admissions
+- models repeated patient admissions (multi-admission patient behaviour)
 - captures realistic ED flow dynamics
 
 Output: 
 ```bash
 ed_cases.csv
 ```
-
 ### 2. Event Log Construction
 - Converts synthetic ED cases into event logs
 - Format: `case_id`, `activity`, `timestamp`
@@ -125,12 +124,12 @@ Three simulation configurations are implemented:
 
 | Severity | Priority | Boarding Time |
 | -------- | -------- | ------------- |
-| Critical | 1        | 90 min        |
+| Critical | 1 (High) | 90 min        |
 | High     | 2        | 110 min       |
 | Medium   | 3        | 147 min       |
-| Low      | 4        | 147 min       |
+| Low      | 4 (Low)  | 147 min       |
 
-3. **Machine Learning Agent**
+3. **Hybrid (ML + Rule-based Agent)**
 Adds ML-based POCT prediction at assessment stage:
 - Random Forest classifier predicts POCT amenability
 - Reduces assessment time for eligible patients
@@ -142,7 +141,7 @@ Adds ML-based POCT prediction at assessment stage:
 Simulation outputs are evaluated using the following key performance metrics:
 
 - **Waiting Time**  
-  Time spent waiting for triage and doctor consultation  
+  Time spent waiting for initial assessment 
 
 - **Boarding Time**  
   Time spent waiting for an inpatient ward/ICU after treatment decision (admitted/transferred patients) 
@@ -160,15 +159,16 @@ Simulation outputs are evaluated using the following key performance metrics:
 The baseline simulation identified two primary bottlenecks:
 
 - **Assessment Stage Bottleneck**  
-  Caused by limited assessment bays, resulting in queues forming before patients can begin triage and consultation. This leads to increased waiting times during peak arrival periods 
+  Caused by limited assessment bays, resulting in queues forming. This leads to increased waiting times during peak arrival periods. 
+  Exceeds NHS 15-minute benchmark 
 
 - **Boarding Stage Bottleneck**  
-  Caused by limited **boarding slot capacity**, preventing admitted patients from leaving the ED promptly. This results in prolonged boarding times and contributes significantly to overall ED congestion.  
+  Caused by limited boarding slot capacity, preventing admitted patients from leaving the ED promptly. This results in prolonged boarding times and contributes significantly to overall ED congestion (exit block).  
 
 The introduction of AI agents did not eliminate these bottlenecks completely, as they are structural constraints within the system. However, the AI interventions:
  
-- Improved prioritisation of high-severity patients  
-- Reduce assessment duration (ML agent)     
+- Improved prioritisation for high-severity patients  
+- Reduce initial assessment duration (ML agent)     
 - Improved patient flow under constrained resources 
 
 This demonstrates that while AI can optimise flow and decision-making, underlying capacity limitations remain the dominant drivers of system congestion.
@@ -191,7 +191,7 @@ This project uses:
 ### 1. Clone the repository
 
 ```bash
-git https://github.com/sreejachowdaryt/ai-agent-for-emergency-department-pathway-simulation.git
+git clone https://github.com/sreejachowdaryt/ai-agent-for-emergency-department-pathway-simulation.git
 cd ai-agent-for-emergency-department-pathway-simulation
 ```
 
@@ -226,7 +226,7 @@ python ER_PATIENTS_FLOW/src/extract_ed_timing_from_mimic_iv_ed.py
 python ER_PATIENTS_FLOW/src/extract_activity_gaps_from_mimic.py
 ```
 
-### Step 2: Generate synthetic dataset (Generated with 50,000 patients)
+### Step 2: Generate synthetic dataset (Already generated with 50,000 patients as MIMIC datasets are not included in the repository this csv file cannot be created from scratch, so move to Step 3)
 
 ```bash
 python ER_PATIENTS_FLOW/src/generate_ed_cases.py
