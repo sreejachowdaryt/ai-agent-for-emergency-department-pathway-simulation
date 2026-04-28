@@ -1,5 +1,11 @@
 # AI Agent for Emergency Department Pathway Simulation
 
+![Python](https://img.shields.io/badge/Python-3.10+-blue)
+![Status](https://img.shields.io/badge/Status-Completed-success)
+![License](https://img.shields.io/badge/License-Academic-lightgrey)
+![Framework](https://img.shields.io/badge/Simulation-SimPy-orange)
+![ML](https://img.shields.io/badge/ML-RandomForest-green)
+
 ---
 
 ## Author 
@@ -11,22 +17,21 @@ COMP3931 Individual Project | University of Leeds | 2025/26
 
 ## Overview
 
-This project investigates how Artificial Intelligence (AI) can be used to simulate and optimise patient flow within an Emergency Department (ED). It combines synthetic data generation, process mining, and discrete-event simulation (DES) to model realistic ED pathways and evaluate the impact of AI-driven decision-making.
+This project investigates the use of Artificial Intelligence (AI) to simulate and optimise patient flow within an Emergency Department (ED). It integrates synthetic data generation, process mining, and discrete-event simulation (DES) to model realistic patient pathways from arrival through assessment to final disposition (discharge, admission, or transfer).
 
-The system models the full patient pathway from arrival through assessment, treatment, and discharge or admission/transferred, and introduces AI-based decision-support mechanisms to improve system efficiency, prioritisation and overall operational performnace.
+AI-based decision-support mechanisms are embedded within the discrete-event simulation (DES) model to improve clinical prioritisation and operational efficiency. The framework enables systematic evaluation of how AI-driven interventions influence key performance metrics such as waiting time, length of stay, and NHS 4-hour target compliance in resource-constrained healthcare environments.
 
 ---
 
 ## Objectives
 
-- Develop a realistic simulation of ED patient flow using fully synthetic dataset
+- Develop a realistic simulation of ED patient flow using a fully synthetic dataset
 - Design an AI agent for prioritisation and operational decision-making
 - Integrate the AI agent into a discrete-event simulation (DES) framework
 - Compare baseline and AI-driven system performance
 - Evaluate improvements in waiting time, length of stay, and NHS compliance
 
 ---
-
 
 ## Project Structure
 
@@ -41,7 +46,7 @@ AI-AGENT-FOR-EMERGENCY-DEPARTMENT-PATHWAY-SIMULATION/
 │   │   └── ...
 │   └── Synthetic_dataset/
 │       └── data/
-│           └── ed_cases.csv
+│           └── ed_cases.csv       # Generated ED cases
 │
 ├── ED_SIMULATION/                 # Process mining, simulation, AI agents
 │   ├── src/
@@ -99,7 +104,7 @@ event_log.csv
 
 ### 4. Discrete-Event Simulation (DES)
 - Built using SimPy
-- ED Pathway Modelled:
+- Simulated ED Pathway from process mining model:
 
 ```bash
 Arrival → Assessment → Outcome Decision → Boarding (if required - only for non-discharge patients) → Departure
@@ -171,18 +176,20 @@ The introduction of AI agents did not eliminate these bottlenecks completely, as
 - Reduce initial assessment duration (ML agent)     
 - Improved patient flow under constrained resources 
 
-This demonstrates that while AI can optimise flow and decision-making, underlying capacity limitations remain the dominant drivers of system congestion.
+This demonstrates that while AI enhances decision-making and improves operational efficiency, system performance remains fundamentally constrained by structural capacity limitations. Therefore, optimal ED performance requires both intelligent decision-support and appropriate resource allocation.
 
 ---
 
-## Data Sources
+## Data Sources and Licensing
 
 This project uses:
 
 - **MIMIC-III** (for care unit transitions and patient pathways)
 - **MIMIC-IV-ED** (for ED-specific timing and arrival patterns)
 
-⚠️ Due to licensing restrictions, MIMIC data is **not included** in this repository.
+Access to these datasets was obtained through the official PhysioNet credentialing process. The project complies with PhysioNet data usage policies and ethical guidelines for handling clinical data.
+
+⚠️ Due to licensing and data protection restrictions, no raw MIMIC data is included in this repository. All datasets used in this project are fully synthetic and derived from statistical distributions.
 
 ---
 
@@ -217,17 +224,26 @@ Ensure it is added to system PATH.
 
 ---
 
-## Usage
+## Usage Pipleine (Implementation Pipeline)
 
-### Step 1: Extract distributions from MIMIC data (Already extracted)
+### Step 1: Extract distributions from MIMIC data 
+The MIMIC-derived distributions have already been extracted and stored as CSV files in "ER_PATIENTS_FLOW/Synthetic_dataset/data/"
 
+These scripts were used during development:
 ```bash
 python ER_PATIENTS_FLOW/src/extract_ed_timing_from_mimic_iv_ed.py
 python ER_PATIENTS_FLOW/src/extract_activity_gaps_from_mimic.py
 ```
 
-### Step 2: Generate synthetic dataset (Already generated with 50,000 patients as MIMIC datasets are not included in the repository this csv file cannot be created from scratch, so move to Step 3)
+Note: The original MIMIC databases are not included in this repository due to ethical considerations. Therefore, these extraction scripts cannot be rerun unless the user has authorised access to MIMIC-III and MIMIC-IV-ED. 
 
+### Step 2: Generate synthetic dataset 
+The synthetic dataset has already been generated from the extracted MIMIC distributions: 
+- ed_cases.csv - 56,511 ED admission episodes 
+- patients.csv - 50,000 synthetic patients
+These files are located in "ER_PATIENTS_FLOW/Synthetic_dataset/data/"
+
+The synthetic dataset was generated using:
 ```bash
 python ER_PATIENTS_FLOW/src/generate_ed_cases.py
 ```
@@ -268,23 +284,29 @@ Rule-Based AI Simulation
 python ED_SIMULATION/src/ed_simulation_ai.py
 ```
 
-Hybrid - ML + Rule-Baased Simulation
+Hybrid - ML + Rule-Based Simulation
 ```bash
 python ED_SIMULATION/src/ed_simulation_ml.py
 ```
 
 ### Step 8: Compare Models
+A complete Three-way simulation comparison between all the three models: baseline, rule-based and hybrid (ML+rule-based)
 
 ```bash
 python ED_SIMULATION/src/compare_simulations.py
 ```
 
-### Step 9: Generate figures
+### Step 9: Generate baseline and comparison figures
 
 ```bash
 python ED_SIMULATION/src/generate_baseline_plots.py
 python ED_SIMULATION/src/generate_comparison_plots.py
 ```
+---
+
+## Reproducibility
+
+All results presented in the dissertation can be reproduced by running the usage pipeline described above. Due to MIMIC data access restrictions, pre-generated distributions and datasets are included to ensure reproducibility without requiring direct access to restricted clinical databases.
 
 ---
 
@@ -307,6 +329,8 @@ python ED_SIMULATION/src/generate_comparison_plots.py
 - Improved NHS 4-hour target compliance
 - Hybrid model achieves best overall system performance
 
+These results highlight the effectiveness of AI-driven interventions in improving both system efficiency and clinical prioritisation under constrained resource conditions.
+
 ---
 
 ## Ethical Considerations 
@@ -317,8 +341,10 @@ python ED_SIMULATION/src/generate_comparison_plots.py
 
 ---
 
-## License
+## Project Status
 
-This project is for academic purposes only.
+This project has been completed as part of the COMP3931 Individual Project at the University of Leeds (2025/26). 
+
+The implementation, evaluation, and documentation are finalised. Future improvements are mentioned in the Final Report submitted to the University.
 
 ---
